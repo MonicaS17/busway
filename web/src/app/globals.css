@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy: #071634;
+  --blue: #168FE3;
+  --yellow: #FFC20A;
+  --light: #EEF0F4;
+  --black: #000000;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--light);
+  color: var(--black);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--yellow);
+  color: var(--navy);
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
