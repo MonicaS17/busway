@@ -210,6 +210,7 @@ router.get('/usuarios', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
+
 // PATCH cambiar estado de usuario
 router.patch('/usuarios/:id/estado', verifyToken, async (req, res) => {
   try {
@@ -225,4 +226,5 @@ router.patch('/usuarios/:id/estado', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
+
 module.exports = router;

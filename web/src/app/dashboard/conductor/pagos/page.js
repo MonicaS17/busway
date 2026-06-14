@@ -1,4 +1,4 @@
-import PanelSection from '@/components/dashboard/PanelSection';
+import PanelSection from '@/components/dashboard/PanelSection'; //cambiar a datos reales cuando el backend esté listo
 import { FiDownload } from 'react-icons/fi';
 
 const payments = [

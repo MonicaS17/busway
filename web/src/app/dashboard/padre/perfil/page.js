@@ -1,22 +1,13 @@
+'use client';
+import { useState, useEffect } from 'react';
 import PanelSection, { DataCard } from '@/components/dashboard/PanelSection';
-
-const children = [
-  ['Maria Gomez', 'Colegio San Agustin', 'Activa'],
-  ['Marcos Gomez', 'Colegio San Agustin', 'Activo'],
-];
-
-const parentInfo = [
-  ['Nombre', 'Carla Gomez'],
-  ['Correo electronico', 'carla@email.com'],
-  ['Telefono', '+507 6123-4455'],
-  ['Direccion', 'La Chorrera, Panama Oeste'],
-];
+import { api } from '@/lib/api';
 
 function ReadOnlyField({ label, value }) {
   return (
     <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
       <p className="text-xs font-bold uppercase text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-extrabold text-navy">{value}</p>
+      <p className="mt-1 text-sm font-extrabold text-navy">{value || '—'}</p>
     </div>
   );
 }
@@ -27,22 +18,58 @@ function ProfilePhoto({ initials, name }) {
       <div className="flex h-32 w-32 shrink-0 items-center justify-center rounded-full bg-busway-yellow text-4xl font-extrabold text-navy shadow-sm ring-4 ring-white/10">
         {initials}
       </div>
-      <div className="mt-4 min-w-0">
+      <div className="mt-4">
         <p className="text-xs font-bold uppercase text-white/60">Padre de familia</p>
         <h2 className="mt-1 text-2xl font-extrabold">{name}</h2>
-        <p className="mt-1 text-sm font-medium text-white/70">Duena de la cuenta</p>
+        <p className="mt-1 text-sm font-medium text-white/70">Dueño de la cuenta</p>
       </div>
     </div>
   );
 }
 
 export default function PadrePerfilPage() {
+  const [usuario, setUsuario] = useState(null);
+  const [hijos, setHijos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('busway_usuario');
+      if (raw) setUsuario(JSON.parse(raw));
+    } catch {}
+
+    api.getPadreHijos()
+      .then((data) => setHijos(data.hijos))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-sm text-slate-500">Cargando perfil...</p>
+      </div>
+    );
+  }
+
+  const nombre = usuario ? `${usuario.nombre} ${usuario.apellido}` : 'Padre BusWay';
+  const initials = usuario
+    ? `${usuario.nombre?.[0] ?? ''}${usuario.apellido?.[0] ?? ''}`.toUpperCase()
+    : 'PB';
+
+  const parentInfo = [
+    ['Nombre', nombre],
+    ['Correo electrónico', usuario?.correo],
+    ['Cédula', usuario?.cedula],
+    ['Estado', usuario?.estado],
+  ];
+
   return (
-    <PanelSection title="Perfil" description="Informacion personal y cantidad de hijos registrados.">
+    <PanelSection title="Perfil" description="Información personal y cantidad de hijos registrados.">
       <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
         <DataCard title="Datos personales">
           <div className="space-y-5">
-            <ProfilePhoto initials="CG" name="Carla Gomez" />
+            <ProfilePhoto initials={initials} name={nombre} />
             <div className="grid gap-3 sm:grid-cols-2">
               {parentInfo.map(([label, value]) => (
                 <ReadOnlyField key={label} label={label} value={value} />
@@ -53,20 +80,26 @@ export default function PadrePerfilPage() {
 
         <DataCard title="Hijos registrados">
           <div className="grid gap-3 sm:grid-cols-[0.7fr_1.3fr] lg:grid-cols-1 xl:grid-cols-[0.7fr_1.3fr]">
-            <div className="rounded-md bg-busway-light p-4">
+            <div className="rounded-md bg-slate-50 p-4 border border-slate-200">
               <p className="text-xs font-bold uppercase text-slate-500">Total registrados</p>
-              <p className="mt-1 text-4xl font-extrabold text-navy">2</p>
+              <p className="mt-1 text-4xl font-extrabold text-navy">{hijos.length}</p>
             </div>
             <div className="space-y-3 text-sm">
-              {children.map(([name, school, status]) => (
-                <div key={name} className="rounded-md border border-slate-200 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-extrabold text-navy">{name}</p>
-                    <span className="rounded-full bg-busway-yellow px-2.5 py-1 text-[11px] font-extrabold text-navy">{status}</span>
+              {hijos.length === 0 ? (
+                <p className="text-sm text-slate-400">No tienes hijos registrados aún.</p>
+              ) : (
+                hijos.map((h) => (
+                  <div key={h._id} className="rounded-md border border-slate-200 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-extrabold text-navy">{h.nombre} {h.apellido}</p>
+                      <span className="rounded-full bg-busway-yellow px-2.5 py-1 text-[11px] font-extrabold text-navy">
+                        {h.estado}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{h.escuela}</p>
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">{school}</p>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </DataCard>

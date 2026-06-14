@@ -1,27 +1,60 @@
+'use client';
+import { useState, useEffect } from 'react';
 import PanelSection from '@/components/dashboard/PanelSection';
-
-const students = [
-  ['Maria Gomez', 'Colegio San Agustin', 'Ruta Norte', 'Activo'],
-  ['Marcos Gomez', 'Colegio San Agustin', 'Ruta Norte', 'Activo'],
-  ['Ana Ruiz', 'Colegio La Salle', 'Ruta Oeste', 'Activo'],
-  ['Luis Mendoza', 'Instituto America', 'Ruta Especial', 'Activo'],
-];
+import { api } from '@/lib/api';
 
 export default function ConductorEstudiantesPage() {
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getConductorEstudiantes()
+      .then((data) => setEstudiantes(data.estudiantes))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-sm text-slate-500">Cargando estudiantes...</p>
+      </div>
+    );
+  }
+
   return (
     <PanelSection title="Lista de estudiantes" description="Estudiantes que el conductor transporta actualmente.">
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-busway-yellow text-xs uppercase text-navy">
-              <tr>{['Estudiante', 'Escuela', 'Ruta', 'Estado'].map((h) => <th key={h} className="px-5 py-3 text-left font-bold">{h}</th>)}</tr>
+              <tr>
+                {['Estudiante', 'Escuela', 'Ruta', 'Estado'].map((h) => (
+                  <th key={h} className="px-5 py-3 text-left font-bold">{h}</th>
+                ))}
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {students.map((student) => (
-                <tr key={student.join('-')}>
-                  {student.map((cell) => <td key={cell} className="px-5 py-4 font-semibold text-slate-700">{cell}</td>)}
+              {estudiantes.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-slate-400">
+                    No tienes estudiantes registrados aún.
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                estudiantes.map((est) => (
+                  <tr key={est._id} className="hover:bg-slate-50">
+                    <td className="px-5 py-4 font-semibold text-slate-700">{est.nombre} {est.apellido}</td>
+                    <td className="px-5 py-4 text-slate-600">{est.escuela}</td>
+                    <td className="px-5 py-4 text-slate-600">{est.ruta}</td>
+                    <td className="px-5 py-4">
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                        {est.estado}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

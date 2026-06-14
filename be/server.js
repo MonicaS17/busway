@@ -8,6 +8,8 @@ require('dotenv').config(); // Cargar variables de entorno
 const authRoutes = require('./routes/auth');
 const escuelasRoutes = require('./routes/escuelas');
 const pagosRoutes = require('./routes/pagos');
+const { router: conductorRoutes } = require('./routes/conductor');
+const padreRoutes = require('./routes/padre');
 
 const app = express();
 
@@ -18,6 +20,8 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/escuelas', escuelasRoutes);
 app.use('/api/pagos', pagosRoutes);
+app.use('/api/conductor', conductorRoutes);
+app.use('/api/padre', padreRoutes);
 
 // Ruta de prueba
 app.get('/', (req, res) => {

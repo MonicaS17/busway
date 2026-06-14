@@ -1,4 +1,4 @@
-import PanelSection from '@/components/dashboard/PanelSection';
+import PanelSection from '@/components/dashboard/PanelSection';//cambiar a datos reales cuando el backend esté listo
 
 const routes = [
   ['Ruta Norte', 'Colegio San Agustin', 'La Chorrera', '14 estudiantes', 'Lunes a viernes'],
