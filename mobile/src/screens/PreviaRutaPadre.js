@@ -68,14 +68,60 @@ export default function PreviaRutaPadre() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, justifyContent: 'center', backgroundColor: '#F8FAFC' },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#1E293B', marginBottom: 25, textAlign: 'center' },
-  esperaCard: { padding: 25, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FEF3C7', alignItems: 'center' },
-  esperaText: { fontSize: 16, fontWeight: 'bold', color: '#D97706', marginBottom: 10 },
-  subEsperaText: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 18 },
-  progresoCard: { padding: 25, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0' },
-  progresoText: { fontSize: 16, fontWeight: 'bold', color: '#10B981', marginBottom: 5, textAlign: 'center' },
-  subProgresoText: { fontSize: 11, color: '#64748B', textAlign: 'center', fontFamily: 'monospace', marginBottom: 20 },
+  container: { 
+    flex: 1, 
+    padding: 20, 
+    justifyContent: 'center', 
+    backgroundColor: '#F8FAFC' },
+
+  title: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    color: '#1E293B', 
+    marginBottom: 25, 
+    textAlign: 'center' },
+
+  esperaCard: { 
+    padding: 25, 
+    borderRadius: 12, 
+    backgroundColor: '#FFF', 
+    borderWidth: 1, 
+    borderColor: '#FEF3C7', 
+    alignItems: 'center' },
+
+  esperaText: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    color: '#D97706', 
+    marginBottom: 10 },
+
+  subEsperaText: { 
+    fontSize: 13, 
+    color: '#64748B', 
+    textAlign: 'center', 
+    lineHeight: 18 },
+
+  progresoCard: { 
+    padding: 25, 
+    borderRadius: 12, 
+    backgroundColor: '#FFF', 
+    borderWidth: 1, 
+    borderColor: '#E2E8F0' },
+
+  progresoText: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    color: '#10B981', 
+    marginBottom: 5, 
+    textAlign: 'center' },
+
+  subProgresoText: { 
+    fontSize: 11, 
+    color: '#64748B', 
+    textAlign: 'center', 
+    fontFamily: 'monospace', 
+    marginBottom: 20 },
+    
   mapMockCard: { backgroundColor: '#1E293B', padding: 15, borderRadius: 8 },
   mapMockTitle: { color: '#38BDF8', fontWeight: 'bold', fontSize: 13, marginBottom: 10 },
   telemetria: { color: '#FFF', fontSize: 14, marginBottom: 4, fontFamily: 'monospace' },
