@@ -42,7 +42,7 @@ export default function PreviaRutaPadre() {
         <View style={styles.esperaCard}>
           <ActivityIndicator size="small" color="#F59E0B" style={{ marginBottom: 15 }} />
           <Text style={styles.esperaText}>A la espera del inicio de la ruta...</Text>
-          <Text style={styles.subEsperaText}>No hay información disponible. La vista del mapa se activará automáticamente cuando el conductor inicie el viaje desde la central.</Text>
+          <Text style={styles.subEsperaText}>No hay información disponible.</Text>
         </View>
       ) : (
         <View style={styles.progresoCard}>
@@ -55,7 +55,6 @@ export default function PreviaRutaPadre() {
               <View>
                 <Text style={styles.telemetria}>Latitud: <Text style={{fontWeight:'bold'}}>{coordenadasEnVivo.lat}</Text></Text>
                 <Text style={styles.telemetria}>Longitud: <Text style={{fontWeight:'bold'}}>{coordenadasEnVivo.lng}</Text></Text>
-                <Text style={styles.telemetria}>Velocidad Bus: <Text style={{color:'#EF4444', fontWeight:'bold'}}>{coordenadasEnVivo.velocidad} km/h</Text></Text>
                 <Text style={styles.telemetriaText}>Última actualización: {new Date(coordenadasEnVivo.timestamp).toLocaleTimeString()}</Text>
               </View>
             ) : (
