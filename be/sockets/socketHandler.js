@@ -19,20 +19,19 @@ module.exports = (io) => {
           hora_salida: new Date()
         });
 
-        console.log(`▶️ Viaje iniciado en BD con ID: ${nuevoViaje._id}`);
+        console.log(`▶️ Viaje iniciado ID: ${nuevoViaje._id}`);
         
-        // Emitir hito de inicio a todos los padres en la sala
         io.to(`sala:ruta:${id_ruta}`).emit('ruta:iniciada', { 
           id_viaje: nuevoViaje._id,
           estado: 'activo' 
         });
       } catch (error) {
-        console.error('Error al iniciar ruta en BD:', error);
+        console.error('Error al iniciar ruta:', error);
         socket.emit('error:servidor', { mensaje: 'No se pudo guardar el hito de inicio.' });
       }
     });
 
-    // Transmisión GPS en tiempo real (Broadcast a la memoria de sockets)
+    // Transmisión GPS en tiempo real
     socket.on('conductor:coordenadas', ({ id_ruta, lat, lng, velocidad }) => {
       socket.to(`sala:ruta:${id_ruta}`).emit('padre:actualizar_mapa', {
         lat,
@@ -42,16 +41,15 @@ module.exports = (io) => {
       });
     });
 
-    // Finalización de ruta por el conductor
+    // Finalización de ruta
     socket.on('ruta:finalizar', async ({ id_viaje, id_ruta }) => {
       try {
-        // Se actualiza el hito de cierre en MongoDB
         await Viaje.findByIdAndUpdate(id_viaje, {
           estado: 'finalizado',
           hora_llegada: new Date()
         });
 
-        console.log(`⏹️ Viaje ${id_viaje} finalizado de manera segura.`);
+        console.log(`⏹️ Viaje ${id_viaje} finalizado manualmente.`);
         io.to(`sala:ruta:${id_ruta}`).emit('ruta:finalizada');
         io.in(`sala:ruta:${id_ruta}`).socketsLeave(`sala:ruta:${id_ruta}`);
       } catch (error) {
@@ -66,33 +64,47 @@ module.exports = (io) => {
         
         const nuevaAsistencia = {
           hijo_id,
-          tipo, // 'subida' o 'bajada'
+          tipo, 
           metodo_registro: 'qr',
           fecha_hora: ahora,
           latitud: lat || null,
           longitud: lng || null
         };
 
-        // Guardar la asistencia usando la instancia del modelo en MongoDB
-        const viajeActualizado = await Viaje.findByIdAndUpdate(
+        await Viaje.findByIdAndUpdate(
           id_viaje,
           { 
             $push: { asistencias: nuevaAsistencia },
-            ...(tipo === 'subida' && { $addToSet: { estudiantes_abordo: hijo_id } })
-          },
-          { new: true }
+            ...(tipo === 'subida' && { $addToSet: { estudiantes_abordo: hijo_id } }),
+            ...(tipo === 'bajada' && { $pull: { estudiantes_abordo: hijo_id } })
+          }
         );
 
         console.log(`📲 Registro [${tipo}] exitoso para el estudiante ${hijo_id}`);
 
-        // Avisar en tiempo real a los dispositivos en la sala
+        // Avisar en tiempo real a la sala de sockets
         io.to(`sala:ruta:${id_ruta}`).emit('asistencia:actualizada', {
           hijo_id,
           tipo,
           fecha_hora: ahora
         });
 
-        // Módulo de notificaciones: Disparar la Notificación Push (Firebase) al token del padre vinculando este evento
+        // MÓDULO DE NOTIFICACIONES SIMULADO (FIREBASE NOTIFICATION)
+        console.log(`🔔 [FIREBASE SIMULACIÓN] Enviando Notificación: padre_${id_ruta}`);
+        console.log(`📢 Título: ${tipo === 'subida' ? 'BusWay: Abordo' : 'BusWay: Destino Confirmado'}`);
+        console.log(`📝 Mensaje: El estudiante ha [${tipo.toUpperCase()}]`);
+        
+        /* const payloadPush = {
+          notification: {
+            title: tipo === 'subida' ? '🚌 ¡Abordo!' : '🏫 ¡Llegada exitosa!',
+            body: `Su hijo ha escaneado el QR de ${tipo} de manera segura.`
+          },
+          topic: `padre_${id_ruta}`
+        };
+        admin.messaging().send(payloadPush)
+          .then(res => console.log("Push exitoso"))
+          .catch(err => console.error("Error en Push", err));
+        */
 
       } catch (error) {
         console.error('Error al registrar asistencia QR:', error);
@@ -100,7 +112,7 @@ module.exports = (io) => {
     });
 
     socket.on('disconnect', () => {
-      console.log(`❌ Cliente desconectado: ${socket.id}`);
+      console.log(`Cliente desconectado: ${socket.id}`);
     });
   });
 };
