@@ -12,6 +12,7 @@ import HijosQRScreen from '../screens/HijosQRScreen';
 import MarketplaceScreen from '../screens/MarketplaceScreen';
 import NotificacionesConductorScreen from '../screens/NotificacionesConductorScreen';
 import AvisosPadreScreen from '../screens/AvisosPadreScreen';
+import PaymentsScreen from '../screens/PaymentsScreen';
 
 const Stack = createStackNavigator();
 
@@ -31,6 +32,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Marketplace" component={MarketplaceScreen} />
         <Stack.Screen name="Notificaciones" component={NotificacionesConductorScreen} />
         <Stack.Screen name="Avisos" component={AvisosPadreScreen} />
+        <Stack.Screen name="Pagos" component={PaymentsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
