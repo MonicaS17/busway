@@ -30,14 +30,14 @@ export default function DashboardScreen({ navigation, route }) {
   };
 
   const menuConductor = [
-    { icon: 'document-text-outline', label: 'Solicitudes', desc: 'Padres interesados en tu ruta' },
+    { icon: 'document-text-outline', label: 'Solicitudes', desc: 'Padres interesados en tu ruta', screen: 'Marketplace' },
     { icon: 'map-outline', label: 'Viajes', desc: 'Inicia y controla tu ruta' },
     { icon: 'notifications-outline', label: 'Notificaciones', desc: 'Avisa a tus padres' },
     { icon: 'card-outline', label: 'Pagos', desc: 'Tus cobros mensuales' },
   ];
 
   const menuPadre = [
-    { icon: 'storefront-outline', label: 'Marketplace', desc: 'Busca un conductor' },
+    { icon: 'storefront-outline', label: 'Marketplace', desc: 'Busca un conductor', screen: 'Marketplace' },
     { icon: 'map-outline', label: 'Viajes', desc: 'Sigue la ruta en vivo' },
     { icon: 'qr-code-outline', label: 'Hijos y QR', desc: 'Gestiona a tus hijos', screen: 'HijosQR' },
     { icon: 'card-outline', label: 'Pagos', desc: 'Tu historial mensual' },
