@@ -61,9 +61,9 @@ const verifyToken = async (req, res, next) => {
     };
 
     if (dbUser.tipo === 'padre') {
-      const Hijo = mongoose.models.hijos || mongoose.model('hijos');
-      const hijos = await Hijo.find({ padre_id: dbUser._id });
-      req.user.hijos_ids = hijos.map(h => h._id.toString());
+      const Estudiante = require('../models/Estudiante');
+      const estudiantes = await Estudiante.find({ padre_id: dbUser._id });
+      req.user.hijos_ids = estudiantes.map(h => h._id.toString());
     }
 
     next();
