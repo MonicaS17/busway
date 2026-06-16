@@ -788,13 +788,13 @@ export default function PreviaRutaConductor({ route, navigation }) {
                         style={[styles.checkInBtn, styles.checkInBtnAbordar]} 
                         onPress={() => setCheckInStatus(est._id, 'abordado')}
                       >
-                        <Text style={styles.checkInBtnText}>🟢 Abordó</Text>
+                        <Text style={styles.checkInBtnText}>Abordado</Text>
                       </TouchableOpacity>
                       <TouchableOpacity 
                         style={[styles.checkInBtn, styles.checkInBtnAusente]} 
                         onPress={() => setCheckInStatus(est._id, 'ausente')}
                       >
-                        <Text style={styles.checkInBtnText}>❌ No Regresa</Text>
+                        <Text style={styles.checkInBtnText}>Ausente</Text>
                       </TouchableOpacity>
                     </>
                   ) : (
@@ -803,7 +803,7 @@ export default function PreviaRutaConductor({ route, navigation }) {
                         styles.checkInBadgeText, 
                         estado === 'abordado' ? styles.checkInBadgeAbordado : styles.checkInBadgeAusente
                       ]}>
-                        {estado === 'abordado' ? '✅ Abordó' : '❌ No regresa'}
+                        {estado === 'abordado' ? 'Abordado' : 'Ausente'}
                       </Text>
                       <TouchableOpacity 
                         style={styles.checkInBtnRevertir} 
@@ -826,8 +826,8 @@ export default function PreviaRutaConductor({ route, navigation }) {
         >
           <Text style={styles.btnText}>
             {!todosAsignadosCheckIn 
-              ? '⌛ Asignar estado a todos los estudiantes para iniciar' 
-              : '▶️ INICIAR VIAJE (VUELTA)'
+              ? 'Asigne el estado de todos los estudiantes para iniciar' 
+              : 'Iniciar Recorrido de Vuelta'
             }
           </Text>
         </TouchableOpacity>
@@ -842,12 +842,12 @@ export default function PreviaRutaConductor({ route, navigation }) {
         <Text style={styles.sectionTitleHeader}>Configuración del Viaje (Ida)</Text>
         <View style={styles.studentListBox}>
           <Text style={styles.studentListHeader}>
-            👨‍🎓 Lista de Estudiantes a Recoger ({list.length}):
+            Lista de Estudiantes a Recoger ({list.length}):
           </Text>
           {list.map((est, index) => (
             <View key={est._id || index} style={styles.studentItem}>
               <Text style={styles.studentName}>{est.nombre} {est.apellido || ''}</Text>
-              <Text style={styles.studentDetail}>Hogar ➔ Colegio</Text>
+              <Text style={styles.studentDetail}>Hogar a Colegio</Text>
             </View>
           ))}
         </View>
@@ -857,7 +857,7 @@ export default function PreviaRutaConductor({ route, navigation }) {
           onPress={iniciarRuta} 
           disabled={procesandoAccion || !conectado}
         >
-          <Text style={styles.btnText}>▶ INICIAR VIAJE (IDA)</Text>
+          <Text style={styles.btnText}>Iniciar Recorrido de Ida</Text>
         </TouchableOpacity>
       </View>
     );
@@ -869,7 +869,7 @@ export default function PreviaRutaConductor({ route, navigation }) {
     const list = rutaInfo ? [rutaInfo] : [];
     return (
       <View style={{ flex: 1 }}>
-        <Text style={styles.sectionTitleHeader}>Mis Rutas Asignadas</Text>
+        <Text style={styles.sectionTitleHeader}>Rutas Asignadas</Text>
         {list.length === 0 ? (
           <Text style={styles.emptyLogsText}>No tienes rutas asignadas actualmente.</Text>
         ) : (
@@ -881,12 +881,12 @@ export default function PreviaRutaConductor({ route, navigation }) {
             >
               <View style={styles.checkInInfo}>
                 <Text style={[styles.checkInName, { fontSize: 15 }]}>{r.nombre}</Text>
-                <Text style={[styles.checkInDetail, { marginTop: 4 }]}>🏫 Escuela: {r.escuela}</Text>
-                <Text style={styles.checkInDetail}>👨‍🎓 Estudiantes asociados: {estudiantes.length}</Text>
-                <Text style={styles.checkInDetail}>⚙️ Estado: {r.estado || 'Activa'}</Text>
+                <Text style={[styles.checkInDetail, { marginTop: 4 }]}>Escuela: {r.escuela}</Text>
+                <Text style={styles.checkInDetail}>Estudiantes asociados: {estudiantes.length}</Text>
+                <Text style={styles.checkInDetail}>Estado: {r.estado || 'Activa'}</Text>
               </View>
               <View style={[styles.checkInActions, { alignSelf: 'center' }]}>
-                <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 13 }}>Seleccionar ➔</Text>
+                <Text style={{ color: '#1E3A8A', fontWeight: 'bold', fontSize: 13 }}>Seleccionar</Text>
               </View>
             </TouchableOpacity>
           ))
@@ -931,8 +931,8 @@ export default function PreviaRutaConductor({ route, navigation }) {
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
-      <Text style={styles.title}>Navegación: Viaje</Text>
-      <Text style={styles.subtitle}>Servidor: {conectado ? '🟢 Conectado' : '🔴 Desconectado'}</Text>
+      <Text style={styles.title}>Navegación de Recorrido</Text>
+      <Text style={styles.subtitle}>Servidor: {conectado ? 'Conectado' : 'Desconectado'}</Text>
 
       {/*
         ── ÁRBOL DE RENDERIZADO CONDICIONAL (flujo cronológico correcto) ──
@@ -953,7 +953,7 @@ export default function PreviaRutaConductor({ route, navigation }) {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <Text style={styles.sectionTitleHeader}>Tipo de Recorrido</Text>
             <TouchableOpacity onPress={() => setRutaSeleccionada(null)}>
-              <Text style={{ color: '#EF4444', fontWeight: 'bold', fontSize: 13 }}>◀ Cambiar Ruta</Text>
+              <Text style={{ color: '#EF4444', fontWeight: 'bold', fontSize: 13 }}>Cambiar Ruta</Text>
             </TouchableOpacity>
           </View>
 
@@ -966,7 +966,7 @@ export default function PreviaRutaConductor({ route, navigation }) {
           
           {/* MAPA DINÁMICO CON HITOS */}
           <View style={styles.mapWrapper}>
-            <Text style={styles.mapTitle}>🗺️ Recorrido del Bus Escolar en Curso:</Text>
+            <Text style={styles.mapTitle}>Recorrido en Curso</Text>
             <Text style={styles.paradaText}>
               Ubicación Actual: {hitoActual?.descripcion || 'Calculando...'}
             </Text>
@@ -1034,7 +1034,7 @@ export default function PreviaRutaConductor({ route, navigation }) {
             
             {hitoActual && (
               <View style={styles.studentInfoCard}>
-                <Text style={styles.studentInfoLabel}>📍 Parada Actual:</Text>
+                <Text style={styles.studentInfoLabel}>Parada Actual:</Text>
                 {hitoActual.esEstudiante ? (
                   <>
                     <View style={styles.studentInfoMain}>
@@ -1051,7 +1051,7 @@ export default function PreviaRutaConductor({ route, navigation }) {
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.studentInfoAddress}>🏠 Dirección: {hitoActual.descripcion}</Text>
+                    <Text style={styles.studentInfoAddress}>Dirección: {hitoActual.descripcion}</Text>
                   </>
                 ) : (
                   <>
@@ -1061,7 +1061,7 @@ export default function PreviaRutaConductor({ route, navigation }) {
                         <Text style={styles.statusBadgeText}>ESTRUCTURAL</Text>
                       </View>
                     </View>
-                    <Text style={styles.studentInfoAddress}>🏫 Sede Principal del Servicio Escolar</Text>
+                    <Text style={styles.studentInfoAddress}>Sede Principal del Servicio Escolar</Text>
                   </>
                 )}
               </View>
@@ -1075,14 +1075,14 @@ export default function PreviaRutaConductor({ route, navigation }) {
                       style={[styles.btnAction, styles.btnActionQr, { flex: 1.2 }]} 
                       onPress={() => registrarAsistenciaQR('subida')}
                     >
-                      <Text style={styles.btnText}>📸 ESCANEAR QR: SUBIDA</Text>
+                      <Text style={styles.btnText}>Escanear Código de Abordaje</Text>
                     </TouchableOpacity>
                     
                     <TouchableOpacity 
                       style={[styles.btnAction, styles.btnActionAusente, { flex: 0.8 }]} 
                       onPress={marcarEstudianteAusente}
                     >
-                      <Text style={styles.btnText}>⚠️ Ausente</Text>
+                      <Text style={styles.btnText}>Reportar Ausente</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -1091,7 +1091,7 @@ export default function PreviaRutaConductor({ route, navigation }) {
                       style={[styles.btnAction, styles.btnActionQr]} 
                       onPress={() => registrarAsistenciaQR('bajada')}
                     >
-                      <Text style={styles.btnText}>📸 ESCANEAR QR: LLEGADA</Text>
+                      <Text style={styles.btnText}>Escanear Código de Desembarque</Text>
                     </TouchableOpacity>
                     
                     <View style={styles.exceptionButtonsRow}>
@@ -1099,14 +1099,14 @@ export default function PreviaRutaConductor({ route, navigation }) {
                         style={[styles.btnAction, styles.btnActionManual, { flex: 1 }]} 
                         onPress={() => registrarAsistenciaManual('entregado')}
                       >
-                        <Text style={styles.btnText}>👤 Entrega Manual</Text>
+                        <Text style={styles.btnText}>Registrar Entrega Manual</Text>
                       </TouchableOpacity>
                       
                       <TouchableOpacity 
                         style={[styles.btnAction, styles.btnActionAusente, { flex: 1 }]} 
                         onPress={marcarEstudianteAusente}
                       >
-                        <Text style={styles.btnText}>⚠️ Ausente</Text>
+                        <Text style={styles.btnText}>Reportar Ausente</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1116,18 +1116,18 @@ export default function PreviaRutaConductor({ route, navigation }) {
               <View>
                 {tipoViaje === 'vuelta' && indiceRuta === 0 ? (
                   <TouchableOpacity style={styles.btnComenzarConduccion} onPress={avanzarSiguienteParada}>
-                    <Text style={styles.btnText}>⚙️ COMENZAR CONDUCCIÓN HACIA LAS CASAS ➔</Text>
+                    <Text style={styles.btnText}>Iniciar Recorrido a Domicilios</Text>
                   </TouchableOpacity>
                 ) : (
                   <View style={styles.escuelaLlegadaBox}>
                     <View style={styles.infoEscuelaCard}>
                       <Text style={styles.infoEscuelaText}>
-                        🏫 {tipoViaje === 'ida' ? 'Llegada al Colegio. Desembarque de alumnos.' : 'Punto final. Regreso al Colegio.'}
+                        {tipoViaje === 'ida' ? 'Llegada al Colegio. Desembarque de alumnos.' : 'Punto final. Regreso al Colegio.'}
                       </Text>
                     </View>
                     {tipoViaje === 'ida' && (
                       <TouchableOpacity style={styles.btnDesembarcarEscuela} onPress={registrarDesembarqueEscuela}>
-                        <Text style={styles.btnText}>🏁 CONFIRMAR LLEGADA Y DESEMBARQUE</Text>
+                        <Text style={styles.btnText}>Confirmar Llegada y Desembarque</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1138,7 +1138,7 @@ export default function PreviaRutaConductor({ route, navigation }) {
 
           {/* LOGS DE ASISTENCIA */}
           <View style={styles.logsBox}>
-            <Text style={styles.logTitle}>📋 Historial de Asistencia:</Text>
+            <Text style={styles.logTitle}>Historial de Asistencia</Text>
             {logsAsistencia.length === 0 ? (
               <Text style={styles.emptyLogsText}>Sin registros de asistencia para este viaje.</Text>
             ) : (
@@ -1156,7 +1156,7 @@ export default function PreviaRutaConductor({ route, navigation }) {
           </View>
 
           <TouchableOpacity style={styles.btnFinalizar} onPress={() => finalizarRutaManual(true)}>
-            <Text style={styles.btnText}>⏹️ FINALIZAR RECORRIDO</Text>
+            <Text style={styles.btnText}>Finalizar Recorrido</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1165,90 +1165,90 @@ export default function PreviaRutaConductor({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: { padding: 20, backgroundColor: '#FFF', paddingBottom: 50 },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#1E293B', marginTop: 40, textAlign: 'center' },
-  subtitle: { fontSize: 13, color: '#64748B', marginBottom: 20, textAlign: 'center' },
+  scrollContainer: { padding: 20, backgroundColor: '#F8FAFC', paddingBottom: 50 },
+  title: { fontSize: 24, fontWeight: '700', color: '#1E3A8A', marginTop: 40, textAlign: 'center', letterSpacing: 0.5 },
+  subtitle: { fontSize: 13, color: '#64748B', marginBottom: 20, textAlign: 'center', fontWeight: '500' },
   previaBox: { marginTop: 20 },
-  sectionTitleHeader: { fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginBottom: 12 },
-  selectorContainer: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 8, padding: 4, marginBottom: 20 },
-  btnSelect: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 6 },
-  btnSelectActive: { backgroundColor: '#3B82F6' },
-  btnSelectText: { color: '#64748B', fontSize: 13, fontWeight: 'bold' },
+  sectionTitleHeader: { fontSize: 16, fontWeight: '700', color: '#1E3A8A', marginBottom: 12, letterSpacing: 0.2 },
+  selectorContainer: { flexDirection: 'row', backgroundColor: '#E2E8F0', borderRadius: 12, padding: 4, marginBottom: 20 },
+  btnSelect: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 8 },
+  btnSelectActive: { backgroundColor: '#1E3A8A' },
+  btnSelectText: { color: '#475569', fontSize: 13, fontWeight: '600' },
   btnSelectTextActive: { color: '#FFF' },
-  studentListBox: { backgroundColor: '#F8FAFC', borderRadius: 10, padding: 15, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 25 },
-  studentListHeader: { fontSize: 14, fontWeight: 'bold', color: '#334155', marginBottom: 10 },
-  studentItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  studentName: { fontSize: 13, color: '#334155', fontWeight: '500' },
-  studentDetail: { fontSize: 11, color: '#64748B' },
-  btnIniciar: { backgroundColor: '#10B981', paddingVertical: 15, borderRadius: 8, alignItems: 'center' },
-  btnText: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
+  studentListBox: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 25, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+  studentListHeader: { fontSize: 14, fontWeight: '700', color: '#1E3A8A', marginBottom: 12 },
+  studentItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  studentName: { fontSize: 14, color: '#1E293B', fontWeight: '600' },
+  studentDetail: { fontSize: 12, color: '#64748B', fontWeight: '500' },
+  btnIniciar: { backgroundColor: '#10B981', paddingVertical: 16, borderRadius: 12, alignItems: 'center', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 },
+  btnText: { color: '#FFF', fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
   interfazEnRuta: { marginTop: 5 },
-  mapWrapper: { marginBottom: 20 },
-  mapTitle: { color: '#1E293B', fontWeight: 'bold', fontSize: 14, marginBottom: 5 },
+  mapWrapper: { marginBottom: 20, backgroundColor: '#FFF', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+  mapTitle: { color: '#1E3A8A', fontWeight: '700', fontSize: 14, marginBottom: 8 },
   paradaText: { color: '#2563EB', fontSize: 13, fontWeight: '600', marginBottom: 10 },
   mapaFisico: { width: '100%', height: Dimensions.get('window').height * 0.35, borderRadius: 12 },
   customMarker: { backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
-  busEmoji: { fontSize: 28, textAlign: 'center', includeFontPadding: false },
-  hitoMarker: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.41 },
-  hitoEstudiante: { backgroundColor: '#3B82F6' },
+  busEmoji: { fontSize: 32, textAlign: 'center', includeFontPadding: false },
+  hitoMarker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 2 },
+  hitoEstudiante: { backgroundColor: '#2563EB' },
   hitoEscuela: { backgroundColor: '#10B981' },
-  hitoActual: { borderColor: '#FFD700', borderWidth: 3, transform: [{ scale: 1.25 }] },
-  hitoEmoji: { fontSize: 13 },
+  hitoActual: { borderColor: '#F59E0B', borderWidth: 3, transform: [{ scale: 1.2 }] },
+  hitoEmoji: { fontSize: 14 },
   
-  studentInfoCard: { backgroundColor: '#F1F5F9', borderRadius: 8, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' },
-  studentInfoLabel: { fontSize: 10, color: '#64748B', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 },
-  studentInfoMain: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  studentInfoName: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
-  studentInfoSchoolName: { fontSize: 16, fontWeight: 'bold', color: '#0F766E' },
-  studentInfoAddress: { fontSize: 12, color: '#475569' },
-  statusBadge: { paddingVertical: 2, paddingHorizontal: 8, borderRadius: 4 },
-  statusBadgeText: { fontSize: 9, fontWeight: 'bold', color: '#FFF' },
+  studentInfoCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+  studentInfoLabel: { fontSize: 11, color: '#64748B', fontWeight: '700', textTransform: 'uppercase', marginBottom: 6, letterSpacing: 0.5 },
+  studentInfoMain: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  studentInfoName: { fontSize: 18, fontWeight: '700', color: '#1E293B' },
+  studentInfoSchoolName: { fontSize: 18, fontWeight: '700', color: '#0F766E' },
+  studentInfoAddress: { fontSize: 13, color: '#475569', lineHeight: 18 },
+  statusBadge: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 8 },
+  statusBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF', letterSpacing: 0.5 },
   statusBadgePendiente: { backgroundColor: '#F59E0B' },
   statusBadgeAbordado: { backgroundColor: '#10B981' },
-  statusBadgeEntregado: { backgroundColor: '#3B82F6' },
+  statusBadgeEntregado: { backgroundColor: '#2563EB' },
   statusBadgeAusente: { backgroundColor: '#EF4444' },
   statusBadgeEscuela: { backgroundColor: '#64748B' },
 
-  qrContainer: { backgroundColor: '#F8FAFC', padding: 15, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 20 },
-  sectionHeader: { fontSize: 14, fontWeight: 'bold', color: '#334155', marginBottom: 12, textAlign: 'center' },
-  qrButtonsRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  qrButtonsRowStacked: { flexDirection: 'column', gap: 10, marginTop: 4 },
-  exceptionButtonsRow: { flexDirection: 'row', gap: 10 },
-  btnAction: { paddingVertical: 13, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  btnActionQr: { backgroundColor: '#3B82F6' },
+  qrContainer: { backgroundColor: '#FFF', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 20, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+  sectionHeader: { fontSize: 15, fontWeight: '700', color: '#1E3A8A', marginBottom: 14, textAlign: 'center' },
+  qrButtonsRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  qrButtonsRowStacked: { flexDirection: 'column', gap: 12, marginTop: 4 },
+  exceptionButtonsRow: { flexDirection: 'row', gap: 12 },
+  btnAction: { paddingVertical: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
+  btnActionQr: { backgroundColor: '#2563EB' },
   btnActionAusente: { backgroundColor: '#EF4444' },
   btnActionManual: { backgroundColor: '#F59E0B' },
-  btnComenzarConduccion: { backgroundColor: '#0F766E', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  infoEscuelaCard: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderWidth: 1, borderRadius: 8, padding: 12, alignItems: 'center' },
-  infoEscuelaText: { fontSize: 13, color: '#065F46', fontWeight: 'bold' },
-  btnDesembarcarEscuela: { backgroundColor: '#10B981', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  btnComenzarConduccion: { backgroundColor: '#1E3A8A', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 10, shadowColor: '#1E3A8A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 },
+  infoEscuelaCard: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderWidth: 1, borderRadius: 12, padding: 14, alignItems: 'center' },
+  infoEscuelaText: { fontSize: 13, color: '#065F46', fontWeight: '700', textAlign: 'center' },
+  btnDesembarcarEscuela: { backgroundColor: '#10B981', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 10, shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 },
   escuelaLlegadaBox: { flexDirection: 'column' },
 
-  checkInContainer: { backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', padding: 16, marginBottom: 20 },
-  checkInTitle: { fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginBottom: 6, textAlign: 'center' },
-  checkInSubtitle: { fontSize: 12, color: '#64748B', marginBottom: 16, textAlign: 'center', lineHeight: 16 },
+  checkInContainer: { backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', padding: 18, marginBottom: 20, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  checkInTitle: { fontSize: 16, fontWeight: '700', color: '#1E3A8A', marginBottom: 8, textAlign: 'center' },
+  checkInSubtitle: { fontSize: 13, color: '#64748B', marginBottom: 16, textAlign: 'center', lineHeight: 18 },
   checkInScroll: { maxHeight: 300, marginBottom: 16 },
-  checkInItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 8 },
+  checkInItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 10 },
   checkInInfo: { flex: 1, marginRight: 10 },
-  checkInName: { fontSize: 14, fontWeight: 'bold', color: '#334155' },
-  checkInDetail: { fontSize: 11, color: '#64748B', marginTop: 2 },
-  checkInActions: { flexDirection: 'row', gap: 6, alignItems: 'center' },
-  checkInBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6 },
-  checkInBtnAbordar: { backgroundColor: '#DCFCE7', borderWidth: 1, borderColor: '#86EFAC' },
-  checkInBtnAusente: { backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FCA5A5' },
-  checkInBtnText: { fontSize: 11, fontWeight: '600', color: '#1E293B' },
-  checkInStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  checkInBadgeText: { fontSize: 11, fontWeight: 'bold', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4, overflow: 'hidden' },
-  checkInBadgeAbordado: { backgroundColor: '#DCFCE7', color: '#15803D' },
-  checkInBadgeAusente: { backgroundColor: '#FEE2E2', color: '#B91C1C' },
-  checkInBtnRevertir: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4, backgroundColor: '#F1F5F9' },
-  checkInBtnRevertirText: { fontSize: 10, color: '#475569', fontWeight: '500' },
-  btnIniciarViajeGrande: { backgroundColor: '#10B981', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
-  btnDisabled: { backgroundColor: '#94A3B8' },
+  checkInName: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
+  checkInDetail: { fontSize: 12, color: '#64748B', marginTop: 4 },
+  checkInActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  checkInBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1 },
+  checkInBtnAbordar: { backgroundColor: '#EBFDF5', borderColor: '#A7F3D0' },
+  checkInBtnAusente: { backgroundColor: '#FFF5F5', borderColor: '#FEB2B2' },
+  checkInBtnText: { fontSize: 12, fontWeight: '600', color: '#1E293B' },
+  checkInStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  checkInBadgeText: { fontSize: 12, fontWeight: '700', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, overflow: 'hidden' },
+  checkInBadgeAbordado: { backgroundColor: '#D1FAE5', color: '#065F46' },
+  checkInBadgeAusente: { backgroundColor: '#FEE2E2', color: '#991B1B' },
+  checkInBtnRevertir: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: '#E2E8F0' },
+  checkInBtnRevertirText: { fontSize: 11, color: '#475569', fontWeight: '600' },
+  btnIniciarViajeGrande: { backgroundColor: '#10B981', paddingVertical: 16, borderRadius: 12, alignItems: 'center', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 },
+  btnDisabled: { backgroundColor: '#CBD5E1', shadowOpacity: 0, elevation: 0 },
 
-  logsBox: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 8, marginBottom: 25 },
-  logTitle: { fontSize: 12, fontWeight: 'bold', color: '#475569', marginBottom: 8 },
-  emptyLogsText: { fontSize: 11, color: '#94A3B8', fontStyle: 'italic', textAlign: 'center' },
-  logText: { fontSize: 11, color: '#334155', fontFamily: 'monospace', marginVertical: 3 },
-  btnFinalizar: { backgroundColor: '#DC2626', paddingVertical: 15, borderRadius: 8, alignItems: 'center' }
+  logsBox: { backgroundColor: '#F1F5F9', padding: 14, borderRadius: 12, marginBottom: 25, borderWidth: 1, borderColor: '#E2E8F0' },
+  logTitle: { fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  emptyLogsText: { fontSize: 12, color: '#94A3B8', fontStyle: 'italic', textAlign: 'center', paddingVertical: 10 },
+  logText: { fontSize: 12, color: '#334155', fontFamily: 'System', marginVertical: 4, lineHeight: 16 },
+  btnFinalizar: { backgroundColor: '#DC2626', paddingVertical: 16, borderRadius: 12, alignItems: 'center', shadowColor: '#DC2626', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 }
 });

@@ -313,13 +313,13 @@ export default function PreviaRutaPadre({ route, navigation }) {
     }
 
     const steps = isIda ? [
-      { title: 'Esperando en Casa', desc: 'El autobús va en camino a su domicilio.', activeText: 'En espera 🏠' },
-      { title: 'Recogido en Casa', desc: 'Estudiante a bordo. Viajando al Colegio.', activeText: 'En ruta 🚌' },
-      { title: 'Dejado en la Escuela', desc: 'Estudiante ha ingresado seguro al Colegio.', activeText: 'Llegada exitosa 🏫' }
+      { title: 'Esperando en Casa', desc: 'El autobús va en camino a su domicilio.', activeText: 'En espera' },
+      { title: 'Recogido en Casa', desc: 'Estudiante a bordo. Viajando al Colegio.', activeText: 'En ruta' },
+      { title: 'Dejado en la Escuela', desc: 'Estudiante ha ingresado seguro al Colegio.', activeText: 'Llegado al colegio' }
     ] : [
-      { title: 'Esperando en la Escuela', desc: 'Abordaje de alumnos en la escuela.', activeText: 'Preparando salida 🏫' },
-      { title: 'Abordó en la Escuela', desc: 'Estudiante a bordo. Viajando hacia casa.', activeText: 'De camino a casa 🚌' },
-      { title: 'Entregado en Casa', desc: 'Estudiante en casa. ¡Trayecto concluido!', activeText: 'Seguro en casa 🏠' }
+      { title: 'Esperando en la Escuela', desc: 'Abordaje de alumnos en la escuela.', activeText: 'Preparando salida' },
+      { title: 'Abordó en la Escuela', desc: 'Estudiante a bordo. Viajando hacia casa.', activeText: 'De camino a casa' },
+      { title: 'Entregado en Casa', desc: 'Estudiante en casa. ¡Trayecto concluido!', activeText: 'Llegado a domicilio' }
     ];
 
     return (
@@ -436,21 +436,19 @@ export default function PreviaRutaPadre({ route, navigation }) {
     );
   }
 
-  const debeMostrarConfirmacion = datosViaje !== null && (estadoEstudiante === 'entregado' || estadoEstudiante === 'bajada');
-
   if (datosViaje === null || estadoRuta === 'espera') {
     return (
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <Text style={styles.title}>Seguimiento de Ruta</Text>
         <Text style={styles.subtitle}>
-          Estado: {conectado ? '🟢 Servidor Conectado' : '🔴 Servidor Desconectado'}
+          Estado: {conectado ? 'Servidor Conectado' : 'Servidor Desconectado'}
         </Text>
 
         <View style={[styles.mapEsperaCard, { height: 250, marginVertical: 20 }]}> 
-          <ActivityIndicator size="large" color="#3B82F6" style={{ marginBottom: 15 }} />
-          <Text style={[styles.mapEsperaText, { fontSize: 16, color: '#1E293B', fontWeight: 'bold' }]}>Esperando que el conductor inicie la ruta.</Text>
-          <Text style={{ fontSize: 12, color: '#64748B', marginTop: 8, textAlign: 'center' }}>
-            La aplicación se actualizará automáticamente en cuanto comience el recorrido.
+          <ActivityIndicator size="large" color="#1E3A8A" style={{ marginBottom: 15 }} />
+          <Text style={[styles.mapEsperaText, { fontSize: 16, color: '#1E293B', fontWeight: 'bold' }]}>Esperando inicio del recorrido</Text>
+          <Text style={{ fontSize: 13, color: '#64748B', marginTop: 8, textAlign: 'center', lineHeight: 18 }}>
+            La información se actualizará en tiempo real cuando el conductor comience el trayecto.
           </Text>
         </View>
       </ScrollView>
@@ -461,7 +459,7 @@ export default function PreviaRutaPadre({ route, navigation }) {
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <Text style={styles.title}>Seguimiento de Ruta</Text>
       <Text style={styles.subtitle}>
-        Estado: {conectado ? '🟢 Servidor Conectado' : '🔴 Servidor Desconectado'}
+        Estado: {conectado ? 'Servidor Conectado' : 'Servidor Desconectado'}
       </Text>
 
       {/* Ficha Informativa del Alumno (siempre visible) */}
@@ -476,43 +474,25 @@ export default function PreviaRutaPadre({ route, navigation }) {
         <Text style={styles.estudianteDetail}>Conductor: {nombreConductor} (Escuela: {rutaInfo?.escuela || 'N/A'})</Text>
       </View>
 
-      {/*
-        ── ÁRBOL DE RENDERIZADO CONDICIONAL (flujo cronológico correcto) ──
-
-        Paso 1 (ESPERA): datosViaje === null
-          → Pantalla de espera limpia con ActivityIndicator y mensaje.
-          → NO se muestra nada del mapa ni de la línea de tiempo.
-
-        Paso 2 (EN PROGRESO): datosViaje !== null
-          → Se evalúa el estado del estudiante para mostrar sub-pantallas:
-            a) haLlegado === true       → Tarjeta de confirmación de entrega
-            b) ausente                  → Tarjeta de alerta de ausencia
-            c) en tránsito              → Línea de tiempo + mapa en vivo
-
-        Paso 3 (VUELTA A ESPERA): al recibir 'ruta:finalizada', datosViaje vuelve a
-          null y el padre regresa automáticamente al Paso 1.
-      */}
-
       {haLlegado ? (
         // a) Confirmación de entrega segura
         <View style={styles.confirmacionCard}>
-          <Text style={styles.confirmacionEmoji}>🎉</Text>
-          <Text style={styles.confirmacionTitle}>¡Llegada Segura Confirmada!</Text>
+          <Text style={styles.confirmacionTitle}>Llegada Confirmada</Text>
               <Text style={styles.confirmacionDesc}>
                 Su hijo(a) <Text style={{ fontWeight: 'bold' }}>{nombreEstudiante}</Text> ha sido{' '}
                 {tipoViaje === 'ida' ? 'dejado(a) en la Escuela' : 'entregado(a) en Casa'} de forma segura.
               </Text>
               <View style={styles.confirmacionInfoBox}>
                 <Text style={styles.confirmacionInfoText}>
-                  🕒 Hora de Entrega: {primerLogEvento?.fecha_hora
+                  Hora de Entrega: {primerLogEvento?.fecha_hora
                     ? new Date(primerLogEvento.fecha_hora).toLocaleTimeString()
                     : new Date().toLocaleTimeString()}
                 </Text>
                 <Text style={styles.confirmacionInfoText}>
-                  📌 Destino: {tipoViaje === 'ida' ? (rutaInfo?.escuela || 'Colegio') : 'Hogar de la Estudiante'}
+                  Destino: {tipoViaje === 'ida' ? (rutaInfo?.escuela || 'Colegio') : 'Hogar de la Estudiante'}
                 </Text>
                 <Text style={styles.confirmacionInfoText}>
-                  🛡️ Verificado mediante: Lectura de Código QR o Confirmación Manual
+                  Verificado mediante: Lectura de Código QR o Confirmación Manual
                 </Text>
               </View>
               <TouchableOpacity
@@ -532,7 +512,7 @@ export default function PreviaRutaPadre({ route, navigation }) {
             // b) Alerta de ausencia
             <View style={styles.alertaAusenteCard}>
               <Text style={styles.alertaAusenteText}>
-                ⚠️ Estudiante reportado como ausente hoy
+                Estudiante reportado como ausente hoy
               </Text>
               <Text style={styles.alertaAusenteDesc}>
                 El conductor ha registrado la ausencia del estudiante en este recorrido. Si considera que es un error, por favor comuníquese directamente.
@@ -548,7 +528,7 @@ export default function PreviaRutaPadre({ route, navigation }) {
               </View>
 
               <View style={styles.mapWrapper}>
-                <Text style={styles.mapTitle}>🗺️ Mapa de Localización en Vivo:</Text>
+                <Text style={styles.mapTitle}>Ubicación en Tiempo Real:</Text>
 
                 {/* ── FIX #11: el mapa SIEMPRE se muestra cuando datosViaje !== null.*/}
                 <MapView
@@ -598,7 +578,7 @@ export default function PreviaRutaPadre({ route, navigation }) {
           )}
 
       <View style={styles.logsBox}>
-        <Text style={styles.logTitle}>📋 Eventos del Alumno:</Text>
+        <Text style={styles.logTitle}>Historial de Actividad del Alumno</Text>
         {logEventos.length === 0 ? (
           <Text style={styles.emptyLogsText}>No se registran eventos de asistencia aún.</Text>
         ) : (
@@ -620,71 +600,70 @@ export default function PreviaRutaPadre({ route, navigation }) {
 
 const styles = StyleSheet.create({
   scrollContainer: { padding: 20, backgroundColor: '#F8FAFC', paddingBottom: 50 },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#1E293B', marginTop: 40, textAlign: 'center' },
-  subtitle: { fontSize: 13, color: '#64748B', marginBottom: 20, textAlign: 'center' },
+  title: { fontSize: 24, fontWeight: '700', color: '#1E3A8A', marginTop: 40, textAlign: 'center', letterSpacing: 0.5 },
+  subtitle: { fontSize: 13, color: '#64748B', marginBottom: 20, textAlign: 'center', fontWeight: '500' },
 
   // Ficha estudiante
-  estudianteCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 15, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
+  estudianteCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 20, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
   estudianteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  estudianteLabel: { fontSize: 12, color: '#64748B', fontWeight: '600' },
-  estudianteBadge: { backgroundColor: '#EFF6FF', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20 },
-  estudianteBadgeText: { fontSize: 12, color: '#2563EB', fontWeight: 'bold' },
-  estudianteDetail: { fontSize: 13, color: '#334155', marginVertical: 2 },
+  estudianteLabel: { fontSize: 11, color: '#64748B', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  estudianteBadge: { backgroundColor: '#EBF5FF', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 8 },
+  estudianteBadgeText: { fontSize: 12, color: '#1E3A8A', fontWeight: '700' },
+  estudianteDetail: { fontSize: 14, color: '#334155', marginVertical: 3, fontWeight: '500' },
 
   // Confirmación Entrega Card
-  confirmacionCard: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderWidth: 1.5, borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 20, shadowColor: '#10B981', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 2 },
-  confirmacionEmoji: { fontSize: 48, marginBottom: 10 },
-  confirmacionTitle: { fontSize: 18, fontWeight: 'bold', color: '#065F46', marginBottom: 6 },
-  confirmacionDesc: { fontSize: 13, color: '#047857', textAlign: 'center', lineHeight: 20, marginBottom: 15 },
-  confirmacionInfoBox: { backgroundColor: '#FFF', width: '100%', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#A7F3D0' },
-  confirmacionInfoText: { fontSize: 12, color: '#065F46', marginVertical: 3, fontWeight: '500' },
-  btnCerrarConfirmacion: { marginTop: 18, backgroundColor: '#10B981', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
-  btnCerrarConfirmacionText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
+  confirmacionCard: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderWidth: 1.5, borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 20, shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 2 },
+  confirmacionTitle: { fontSize: 18, fontWeight: '700', color: '#065F46', marginBottom: 8 },
+  confirmacionDesc: { fontSize: 14, color: '#047857', textAlign: 'center', lineHeight: 20, marginBottom: 16 },
+  confirmacionInfoBox: { backgroundColor: '#FFF', width: '100%', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#A7F3D0' },
+  confirmacionInfoText: { fontSize: 13, color: '#065F46', marginVertical: 4, fontWeight: '600' },
+  btnCerrarConfirmacion: { marginTop: 18, backgroundColor: '#10B981', paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12, shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 3 },
+  btnCerrarConfirmacionText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700', textAlign: 'center' },
 
   // Alerta Ausencia
-  alertaAusenteCard: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 20 },
-  alertaAusenteText: { fontSize: 15, fontWeight: 'bold', color: '#DC2626', marginBottom: 6 },
-  alertaAusenteDesc: { fontSize: 12, color: '#7F1D1D', lineHeight: 18 },
+  alertaAusenteCard: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', borderWidth: 1.5, borderRadius: 16, padding: 16, marginBottom: 20, shadowColor: '#EF4444', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 1 },
+  alertaAusenteText: { fontSize: 15, fontWeight: '700', color: '#DC2626', marginBottom: 6 },
+  alertaAusenteDesc: { fontSize: 13, color: '#7F1D1D', lineHeight: 20 },
 
   // Card Progreso / Timeline
-  progresoCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 20 },
-  sectionTitle: { fontSize: 14, fontWeight: 'bold', color: '#1E293B', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
+  progresoCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 20, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1E3A8A', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   // Línea de tiempo (Vertical)
   timelineContainer: { paddingLeft: 10 },
-  timelineItem: { flexDirection: 'row', minHeight: 65 },
+  timelineItem: { flexDirection: 'row', minHeight: 70 },
   timelineLeft: { alignItems: 'center', marginRight: 15, width: 30 },
   timelineDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center', zIndex: 2 },
-  timelineDotActive: { backgroundColor: '#3B82F6', borderWidth: 2, borderColor: '#EFF6FF' },
+  timelineDotActive: { backgroundColor: '#2563EB', borderWidth: 2, borderColor: '#EFF6FF' },
   timelineDotCompleted: { backgroundColor: '#10B981' },
   innerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#94A3B8' },
   innerDotActive: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFF' },
-  dotIcon: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
+  dotIcon: { color: '#FFF', fontSize: 12, fontWeight: '700' },
   timelineLine: { width: 3, flex: 1, backgroundColor: '#E2E8F0', position: 'absolute', top: 24, bottom: -12, zIndex: 1 },
   timelineLineCompleted: { backgroundColor: '#10B981' },
   timelineRight: { flex: 1, paddingTop: 2 },
-  timelineTitle: { fontSize: 14, fontWeight: 'bold', color: '#64748B' },
+  timelineTitle: { fontSize: 14, fontWeight: '700', color: '#64748B' },
   timelineTextCompleted: { color: '#10B981' },
-  timelineTextActive: { color: '#3B82F6' },
-  timelineDesc: { fontSize: 11, color: '#94A3B8', marginTop: 2, lineHeight: 15 },
-  timelineStatusBadge: { alignSelf: 'flex-start', fontSize: 10, fontWeight: 'bold', color: '#FFF', backgroundColor: '#3B82F6', paddingVertical: 2, paddingHorizontal: 6, borderRadius: 4, marginTop: 5, overflow: 'hidden' },
+  timelineTextActive: { color: '#2563EB' },
+  timelineDesc: { fontSize: 12, color: '#64748B', marginTop: 4, lineHeight: 16 },
+  timelineStatusBadge: { alignSelf: 'flex-start', fontSize: 10, fontWeight: '700', color: '#FFF', backgroundColor: '#2563EB', paddingVertical: 3, paddingHorizontal: 8, borderRadius: 6, marginTop: 6, overflow: 'hidden' },
 
   // Mapa
-  mapWrapper: { marginBottom: 20 },
-  mapTitle: { color: '#1E293B', fontWeight: 'bold', fontSize: 14, marginBottom: 8 },
+  mapWrapper: { marginBottom: 20, backgroundColor: '#FFF', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+  mapTitle: { color: '#1E3A8A', fontWeight: '700', fontSize: 14, marginBottom: 8 },
   mapaFisico: { width: '100%', height: Dimensions.get('window').height * 0.32, borderRadius: 12 },
-  mapEsperaCard: { width: '100%', height: Dimensions.get('window').height * 0.32, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  mapEsperaText: { color: '#D97706', fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  mapEsperaCard: { width: '100%', height: 250, borderRadius: 16, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center', padding: 20, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  mapEsperaText: { color: '#D97706', fontSize: 14, fontWeight: '700', textAlign: 'center' },
   
   // Marcadores mapa
   customMarkerBus: { backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
-  customMarkerHito: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', elevation: 3 },
-  markerEmoji: { fontSize: 26 },
-  markerEmojiSmall: { fontSize: 13 },
+  customMarkerHito: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', elevation: 4 },
+  markerEmoji: { fontSize: 28 },
+  markerEmojiSmall: { fontSize: 14 },
 
   // Logs
-  logsBox: { backgroundColor: '#F1F5F9', padding: 15, borderRadius: 12, marginBottom: 25 },
-  logTitle: { fontSize: 12, fontWeight: 'bold', color: '#475569', marginBottom: 8 },
-  emptyLogsText: { fontSize: 11, color: '#94A3B8', fontStyle: 'italic', textAlign: 'center' },
-  logText: { fontSize: 11, color: '#334155', fontFamily: 'monospace', marginVertical: 3 }
+  logsBox: { backgroundColor: '#F1F5F9', padding: 16, borderRadius: 16, marginBottom: 25, borderWidth: 1, borderColor: '#E2E8F0' },
+  logTitle: { fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  emptyLogsText: { fontSize: 12, color: '#94A3B8', fontStyle: 'italic', textAlign: 'center', paddingVertical: 10 },
+  logText: { fontSize: 12, color: '#334155', fontFamily: 'System', marginVertical: 4, lineHeight: 16 }
 });
