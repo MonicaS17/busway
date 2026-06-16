@@ -9,6 +9,8 @@ import RegisterScreen from '../screens/RegisterScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import PerfilScreen from '../screens/PerfilScreen';
 import HijosQRScreen from '../screens/HijosQRScreen';
+import PreviaRutaConductor from '../screens/PreviaRutaConductor';
+import PreviaRutaPadre from '../screens/PreviaRutaPadre';
 
 const Stack = createStackNavigator();
 
@@ -25,6 +27,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Dashboard" component={DashboardScreen} />
         <Stack.Screen name="Perfil" component={PerfilScreen} />
         <Stack.Screen name="HijosQR" component={HijosQRScreen} />
+        <Stack.Screen name="PreviaRutaConductor" component={PreviaRutaConductor} />
+        <Stack.Screen name="PreviaRutaPadre" component={PreviaRutaPadre} />
       </Stack.Navigator>
     </NavigationContainer>
   );
