@@ -159,6 +159,8 @@ export default function MarketplaceScreen({ navigation, route }) {
               );
               actualizarSolicitudes(actualizadas);
             }}
+            navigation={navigation}
+            usuario={usuario}
           />
         )}
       </View>
@@ -543,7 +545,7 @@ function CardSolicitudPadre({ solicitud }) {
 }
 
 // ─── Vista CONDUCTOR ──────────────────────────────────────────────────────────
-function MarketplaceConductor({ rutas, onAgregarRuta, solicitudes, onCambiarEstado }) {
+function MarketplaceConductor({ rutas, onAgregarRuta, solicitudes, onCambiarEstado, navigation, usuario }) {
   const [tabActivo, setTabActivo] = useState('rutas'); // 'rutas' | 'recibidas'
   const [rutaDetalle, setRutaDetalle] = useState(null); //para los detalles de las rutas al tocar el card
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
@@ -565,13 +567,15 @@ function MarketplaceConductor({ rutas, onAgregarRuta, solicitudes, onCambiarEsta
   }
 
   if (rutaDetalle) {
-    return (
-      <DetalleRutaConductor 
-        ruta={rutaDetalle} 
-        onVolver={() => setRutaDetalle(null)} 
-      />
-    );
-  }
+  return (
+    <DetalleRutaConductor 
+      ruta={rutaDetalle} 
+      onVolver={() => setRutaDetalle(null)}
+      navigation={navigation}
+      usuario={usuario}
+    />
+  );
+}
 
   if (rutas.length === 0 && tabActivo === 'rutas') {
     return <PantallaConfigRuta onComenzar={() => setMostrarFormulario(true)} />;
@@ -638,7 +642,7 @@ function MarketplaceConductor({ rutas, onAgregarRuta, solicitudes, onCambiarEsta
 }
 
 // ─── Detalles del card de la ruta (conductor) ──────────────────────────────────
-function DetalleRutaConductor({ ruta, onVolver }) {
+function DetalleRutaConductor({ ruta, onVolver, navigation, usuario }) {
   const [editando, setEditando] = useState(false);
   
   // Datos quemados para la simulación del Frontend del proyecto
@@ -772,7 +776,7 @@ function DetalleRutaConductor({ ruta, onVolver }) {
         {/* Botón de Acción Principal para Iniciar el Viaje */}
         <TouchableOpacity 
           style={styles.btnIniciarViajeAccion} 
-          onPress={() => Alert.alert("BusWay GPS", "Iniciando transmisión satelital en tiempo real. Los acudientes han sido notificados del inicio del recorrido.")}
+          onPress={() => navigation.navigate('Viaje', { usuario })}
         >
           <Ionicons name="play" size={16} color="#0D1B3E" />
           <Text style={styles.btnIniciarViajeAccionText}>Iniciar Ruta en Tiempo Real</Text>
