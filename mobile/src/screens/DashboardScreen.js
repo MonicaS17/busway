@@ -30,25 +30,32 @@ export default function DashboardScreen({ navigation, route }) {
   };
 
   const menuConductor = [
-    { icon: 'document-text-outline', label: 'Solicitudes', desc: 'Padres interesados en tu ruta' },
-    { icon: 'map-outline', label: 'Viajes', desc: 'Inicia y controla tu ruta', screen: 'PreviaRutaConductor' }, //viaje conductor
-    { icon: 'notifications-outline', label: 'Notificaciones', desc: 'Avisa a tus padres' },
-    { icon: 'card-outline', label: 'Pagos', desc: 'Tus cobros mensuales' },
+    { icon: 'document-text-outline', label: 'Solicitudes', desc: 'Padres interesados en tu ruta', screen: 'Marketplace' },
+    { icon: 'map-outline', label: 'Rutas', desc: 'Ver y gestionar tu ruta', screen:'Ruta' },
+    { icon: 'notifications-outline', label: 'Notificaciones', desc: 'Avisa a tus padres', screen: 'Notificaciones' },
+    { icon: 'card-outline', label: 'Pagos', desc: 'Tus cobros mensuales', screen: 'Pagos' },
   ];
 
   const menuPadre = [
-    { icon: 'storefront-outline', label: 'Marketplace', desc: 'Busca un conductor' },
-    { icon: 'map-outline', label: 'Viajes', desc: 'Sigue la ruta en vivo', screen: 'PreviaRutaPadre' }, //viaje padre
-    { icon: 'qr-code-outline', label: 'Hijos y QR', desc: 'Gestiona a tus hijos', screen: 'HijosQR' },
-    { icon: 'card-outline', label: 'Pagos', desc: 'Tu historial mensual' },
+    { icon: 'storefront-outline', label: 'Marketplace', desc: 'Busca un conductor', screen: 'Marketplace' },
+    { icon: 'map-outline', label: 'Ruta', desc: 'Ver ruta', screen: 'Ruta' },
+    { icon: 'qr-code-outline', label: 'Hijos y QR', desc: 'Gestiona a tus Hijos', screen: 'HijosQR' },
+    { icon: 'card-outline', label: 'Pagos', desc: 'Tus cobros mensuales', screen:'Pagos' },
   ];
 
   const menu = usuario.tipo === 'conductor' ? menuConductor : menuPadre;
 
   const tabs = [
     { icon: 'home-outline', label: 'Inicio', active: true },
-    { icon: 'map-outline', label: 'Ruta' },
-    { icon: 'notifications-outline', label: 'Avisos' },
+    { icon: 'location-outline', label: 'Viaje', onPress: () => navigation.navigate('Viaje', { usuario }) },
+    {
+      icon: 'notifications-outline',
+      label: 'Avisos',
+      onPress: () => navigation.navigate(
+        usuario.tipo === 'conductor' ? 'Notificaciones' : 'Avisos',
+        { usuario }
+      ),
+    },
     { icon: 'log-out-outline', label: 'Salir', onPress: handleLogout, isLogout: true },
   ];
   
