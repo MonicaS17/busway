@@ -1,0 +1,473 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import TarjetaEstudiante from './TarjetaEstudiante';
+import IndicadorParada from './IndicadorParada';
+
+export default function ViajeActivo(props) {
+  const { esPadre, bottomInset } = props;
+  const insetsBottom = Math.max(bottomInset || 0, 16);
+  const pulso = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulso, { toValue: 1.12, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulso, { toValue: 1,    duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [pulso]);
+
+  if (esPadre) {
+    return <ViajeActivoPadre {...props} pulso={pulso} bottomInset={insetsBottom} />;
+  }
+  return <ViajeActivoConductor {...props} pulso={pulso} bottomInset={insetsBottom} />;
+}
+
+// ─── VISTA PADRE ─────────────────────────────────────────────────────────
+function ViajeActivoPadre({
+  rutaActiva,
+  faseViaje,   // 'en_curso' | 'entre_viajes' | 'sin_viaje'
+  tipoViaje,   // 'ida' | 'vuelta'
+  coordenadasBus,
+  rutaInfo,
+  conductorInfo,
+  hijos,
+  pulso,
+  bottomInset
+}) {
+  const firstChild = hijos[0];
+  const estadoHijo = firstChild?.estado || 'pendiente';
+
+  //Mapeo de estados visuales para la pantalla del padre
+  let estadoVisual = 'esperando_ida';
+
+  if (faseViaje === 'sin_viaje') {
+    estadoVisual = 'esperando_ida';
+  } else if (faseViaje === 'entre_viajes') {
+    estadoVisual = 'en_escuela';
+  } else if (rutaActiva || faseViaje === 'en_curso') {
+    if (tipoViaje === 'vuelta') {
+      if (estadoHijo === 'entregado') {
+        estadoVisual = 'entregado';
+      } else if (estadoHijo === 'abordo') {
+        estadoVisual = 'regreso_iniciado';
+      } else {
+        estadoVisual = 'en_escuela';
+      }
+    } else {
+      // Ida
+      if (estadoHijo === 'abordo') {
+        estadoVisual = 'recogido_en_casa';
+      } else {
+        estadoVisual = 'esperando_ida';
+      }
+    }
+  }
+
+  const configVisual = {
+    esperando_ida: {
+      icono: 'time-outline',
+      titulo: 'Esperando recogida',
+      mensaje: 'El conductor aún no ha iniciado la ruta.',
+      colorFondo: '#F5F8FC',
+      colorTexto: '#0D1B3E',
+      colorIcono: '#888',
+      activo: false
+    },
+    recogido_en_casa: {
+      icono: 'bus-outline',
+      titulo: 'En camino a la escuela',
+      mensaje: 'Tu hijo fue recogido y va en camino a la escuela.',
+      colorFondo: '#10B981',
+      colorTexto: '#fff',
+      colorIcono: '#fff',
+      activo: true
+    },
+    en_escuela: {
+      icono: 'school-outline',
+      titulo: 'En la escuela',
+      mensaje: 'Tu hijo llegó a la escuela. El viaje de regreso iniciará más tarde.',
+      colorFondo: '#3B82F6',
+      colorTexto: '#fff',
+      colorIcono: '#fff',
+      activo: false
+    },
+    regreso_iniciado: {
+      icono: 'home-outline',
+      titulo: 'Va en camino a casa',
+      mensaje: 'El conductor ya salió de la escuela con tu hijo.',
+      colorFondo: '#F59E0B',
+      colorTexto: '#fff',
+      colorIcono: '#fff',
+      activo: true
+    },
+    entregado: {
+      icono: 'checkmark-circle-outline',
+      titulo: 'Llegó a casa',
+      mensaje: 'Tu hijo fue entregado en casa.',
+      colorFondo: '#10B981',
+      colorTexto: '#fff',
+      colorIcono: '#fff',
+      activo: false
+    }
+  }[estadoVisual] || {
+    icono: 'time-outline',
+    titulo: 'Esperando recogida',
+    mensaje: 'El conductor aún no ha iniciado la ruta.',
+    colorFondo: '#F5F8FC',
+    colorTexto: '#0D1B3E',
+    colorIcono: '#888',
+    activo: false
+  };
+
+  const mapRef = useRef(null);
+  const coordenadasHijo = firstChild?.latitud && firstChild?.longitud
+    ? { latitude: Number(firstChild.latitud), longitude: Number(firstChild.longitud) }
+    : { latitude: 8.9833, longitude: -79.5167 };
+
+  useEffect(() => {
+    if (rutaActiva && mapRef.current) {
+      mapRef.current.animateToRegion(coordenadasBus, 800);
+    }
+  }, [coordenadasBus, rutaActiva]);
+
+  const getSafeText = (value, fallback = '') => {
+    if (typeof value === 'string') return value.trim() || fallback;
+    return fallback;
+  };
+
+  return (
+    <ScrollView contentContainerStyle={[styles.body, { paddingBottom: bottomInset + 24 }]} showsVerticalScrollIndicator={false}>
+      <View style={[
+        styles.estadoViajeBanner,
+        { backgroundColor: configVisual.colorFondo }
+      ]}>
+        <Animated.View style={[
+          styles.estadoPuntoGrande,
+          configVisual.activo ? styles.puntoBusActivo : styles.puntoBusEspera,
+          { transform: [{ scale: pulso }] }
+        ]} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.estadoViajeTitle, { color: configVisual.colorTexto }]}>
+            {configVisual.titulo}
+          </Text>
+          <Text style={[styles.estadoViajeSub, { color: configVisual.colorTexto === '#fff' ? 'rgba(255,255,255,0.8)' : '#888' }]}>
+            {configVisual.mensaje}
+          </Text>
+        </View>
+        <Ionicons name={configVisual.icono} size={22} color={configVisual.colorIcono} />
+      </View>
+
+      <Text style={styles.sectionLabel}>Ubicación del bus</Text>
+      <View style={styles.mapaContainer}>
+        {rutaActiva ? (
+          <>
+            <MapView ref={mapRef} style={styles.mapaSimulado} provider={PROVIDER_DEFAULT} initialRegion={coordenadasBus}>
+              <Marker coordinate={coordenadasBus} title="Autobús Escolar" zIndex={99}>
+                <View style={styles.customMarkerBus}><Text style={styles.markerEmoji}>🚌</Text></View>
+              </Marker>
+              <Marker coordinate={coordenadasHijo} title="Tu Hogar" zIndex={5}>
+                <View style={[styles.customMarkerHito, { backgroundColor: '#3B82F6' }]}><Text style={styles.markerEmojiSmall}>🏠</Text></View>
+              </Marker>
+              <Marker coordinate={{ latitude: 8.9975, longitude: -79.5240 }} title={rutaInfo?.escuela || 'Colegio San Agustín'} zIndex={5}>
+                <View style={[styles.customMarkerHito, { backgroundColor: '#10B981' }]}><Text style={styles.markerEmojiSmall}>🏫</Text></View>
+              </Marker>
+            </MapView>
+            <View style={styles.mapaFooter}>
+              <Ionicons name="information-circle-outline" size={14} color="#888" />
+              <Text style={styles.mapaFooterText}>Actualización GPS cada 5 segundos · Socket.io</Text>
+            </View>
+          </>
+        ) : (
+          <View style={styles.mapaInactivo}>
+            <Ionicons name="map-outline" size={40} color="#C8D6E5" />
+            <Text style={styles.mapaInactivoTitle}>Mapa no disponible</Text>
+            <Text style={styles.mapaInactivoDesc}>El mapa se activará cuando el conductor inicie el recorrido.</Text>
+          </View>
+        )}
+      </View>
+
+      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Conductor</Text>
+      <View style={styles.infoCard}>
+        <View style={styles.conductorRow}>
+          <View style={styles.avatarMed}>
+            <Text style={styles.avatarMedText}>{getSafeText(conductorInfo?.nombre, 'C').charAt(0).toUpperCase()}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.conductorNombre}>{getSafeText(conductorInfo?.nombre, 'Conductor')}</Text>
+            <Text style={styles.conductorSub}>{getSafeText(conductorInfo?.datos_conductor?.vehiculo, 'Vehículo')} · {getSafeText(conductorInfo?.datos_conductor?.placa, 'Placa')}</Text>
+          </View>
+          <TouchableOpacity style={styles.btnWA} onPress={() => Alert.alert('WhatsApp', `Contactar a ${getSafeText(conductorInfo?.nombre, 'el conductor')}`)}>
+            <Ionicons name="logo-whatsapp" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.divider} />
+        <FilaInfoViaje icon="school-outline" label="Escuela" valor={getSafeText(rutaInfo?.escuela, 'Colegio San Agustín')} />
+        <FilaInfoViaje icon="time-outline" label="Horario" valor={getSafeText(rutaInfo?.horario, '6:30 AM — 7:15 AM')} last />
+      </View>
+
+      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Estado de tus hijos</Text>
+      <View style={styles.infoCard}>
+        {hijos.map((hijo, i) => {
+          const cfg = {
+            pendiente: { color: '#F59E0B', bg: '#FFF8E1', icon: 'time-outline', texto: 'Pendiente' },
+            abordo:    { color: '#16A34A', bg: '#E6F9EE', icon: 'checkmark-circle-outline', texto: 'A bordo' },
+            entregado: { color: '#0D1B3E', bg: '#E8F0FE', icon: 'school-outline', texto: 'Entregado' },
+            ausente:   { color: '#DC2626', bg: '#FEE2E2', icon: 'close-circle-outline', texto: 'Ausente' },
+          }[hijo.estado] || { color: '#888', bg: '#F5F5F5', icon: 'help-circle-outline', texto: hijo.estado };
+
+          return (
+            <View key={hijo.id} style={[styles.hijoEstadoRow, i < hijos.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}>
+              <View style={styles.hijoAvatar}><Text style={styles.hijoAvatarText}>{hijo.nombre.charAt(0).toUpperCase()}</Text></View>
+              <Text style={styles.hijoNombre}>{hijo.nombre}</Text>
+              <View style={[styles.estadoChip, { backgroundColor: cfg.bg }]}>
+                <Ionicons name={cfg.icon} size={13} color={cfg.color} /><Text style={[styles.estadoChipText, { color: cfg.color }]}>{cfg.texto}</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+}
+
+// ─── VISTA CONDUCTOR ─────────────────────────────────────────────────────────
+function ViajeActivoConductor({
+  tipoViaje,
+  estudiantes,
+  marcarEstado,
+  handleQRScanned,
+  handleParentQRScanned,
+  finalizarRuta,
+  pulso,
+  bottomInset
+}) {
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const abordo = estudiantes.filter(e => e.estado === 'abordo').length;
+  const pendiente = estudiantes.filter(e => e.estado === 'pendiente').length;
+  const ausente = estudiantes.filter(e => e.estado === 'ausente').length;
+
+  const estudianteActual = tipoViaje === 'ida'
+    ? estudiantes.find(e => e.estado === 'pendiente')
+    : estudiantes.find(e => e.estado === 'abordo');
+
+  return (
+    <View style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: bottomInset + 24 }]} showsVerticalScrollIndicator={false}>
+        <Animated.View style={[styles.gpsBanner, { transform: [{ scale: pulso }] }]}>
+          <View style={styles.gpsPunto} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.gpsBannerTitle}>GPS activo · Ruta en curso</Text>
+            <Text style={styles.gpsBannerSub}>Los padres están viendo tu ubicación en tiempo real</Text>
+          </View>
+          <Ionicons name="radio-outline" size={20} color="#fff" />
+        </Animated.View>
+
+        {estudianteActual && <IndicadorParada tipoViaje={tipoViaje} student={estudianteActual} />}
+
+        {estudianteActual ? (
+          <View style={styles.seccionAccion}>
+            {tipoViaje === 'ida' ? (
+              <>
+                <View style={styles.cameraContainer}>
+                  {permission?.granted ? (
+                    <CameraView style={{ flex: 1 }} facing="back" onBarcodeScanned={handleQRScanned} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} />
+                  ) : (
+                    <TouchableOpacity style={styles.btnPrimary} onPress={requestPermission}><Text style={styles.btnPrimaryText}>Conceder permiso de cámara</Text></TouchableOpacity>
+                  )}
+                  <View style={styles.qrOverlay}>
+                    <View style={styles.qrFrame}>
+                      <View style={[styles.qrCorner, styles.qrCornerTL]} /><View style={[styles.qrCorner, styles.qrCornerTR]} />
+                      <View style={[styles.qrCorner, styles.qrCornerBL]} /><View style={[styles.qrCorner, styles.qrCornerBR]} />
+                    </View>
+                  </View>
+                </View>
+                <TarjetaEstudiante student={estudianteActual} />
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                  <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#16A34A', flex: 1 }]} onPress={() => marcarEstado(estudianteActual.id, 'abordo')}>
+                    <Ionicons name="checkmark-circle-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>Recogido</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#DC2626', width: 110 }]} onPress={() => marcarEstado(estudianteActual.id, 'ausente')}>
+                    <Ionicons name="close-circle-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>Ausente</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.cameraContainer}>
+                  {permission?.granted ? (
+                    <CameraView style={{ flex: 1 }} facing="back" onBarcodeScanned={handleParentQRScanned} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} />
+                  ) : (
+                    <TouchableOpacity style={styles.btnPrimary} onPress={requestPermission}><Text style={styles.btnPrimaryText}>Conceder permiso de cámara</Text></TouchableOpacity>
+                  )}
+                  <View style={styles.qrOverlay}>
+                    <View style={styles.qrFrame}>
+                      <View style={[styles.qrCorner, styles.qrCornerTL]} /><View style={[styles.qrCorner, styles.qrCornerTR]} />
+                      <View style={[styles.qrCorner, styles.qrCornerBL]} /><View style={[styles.qrCorner, styles.qrCornerBR]} />
+                    </View>
+                  </View>
+                </View>
+                <TarjetaEstudiante student={estudianteActual} />
+                <View style={{ flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                  <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#0D1B3E' }]} onPress={() => marcarEstado(estudianteActual.id, 'entregado')}>
+                    <Ionicons name="hand-left-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>Entregar estudiante</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        ) : (
+          <View style={styles.seccionFin}>
+            <View style={styles.finIconWrap}><Ionicons name="happy-outline" size={48} color="#16A34A" /></View>
+            <Text style={styles.finTitle}>¡Todo listo!</Text>
+            <Text style={styles.finDesc}>
+              {tipoViaje === 'ida'
+                ? 'Todos los estudiantes han sido procesados. Presiona el botón a continuación para registrar la llegada a la escuela.'
+                : 'Todos los estudiantes a bordo han sido entregados en sus hogares.'}
+            </Text>
+            <TouchableOpacity style={[styles.btnFinalizar, { marginTop: 10, alignSelf: 'stretch' }]} onPress={finalizarRuta}>
+              <Ionicons name={tipoViaje === 'ida' ? 'school-outline' : 'flag'} size={18} color="#fff" />
+              <Text style={styles.btnFinalizarText}>{tipoViaje === 'ida' ? 'Llegamos a la escuela' : 'Finalizar Ruta'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={[styles.miniStats, { marginTop: 20 }]}>
+          <MiniStat valor={abordo}    label="A bordo"   color="#16A34A" />
+          <MiniStat valor={pendiente} label="Pendiente" color="#F59E0B" />
+          <MiniStat valor={ausente}   label="Ausente"   color="#DC2626" />
+        </View>
+
+        <Text style={styles.sectionLabel}>Estudiantes en ruta</Text>
+        <View style={styles.infoCard}>
+          {estudiantes.map((est, i) => {
+            const cfg = {
+              pendiente: { color: '#F59E0B', icon: 'time-outline' },
+              abordo:    { color: '#16A34A', icon: 'checkmark-circle-outline' },
+              ausente:   { color: '#DC2626', icon: 'close-circle-outline' },
+              entregado: { color: '#0D1B3E', icon: 'school-outline' },
+            }[est.estado] || { color: '#F59E0B', icon: 'time-outline' };
+
+            return (
+              <View key={est.id} style={[styles.estRutaRow, i < estudiantes.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}> 
+                <Ionicons name={cfg.icon} size={18} color={cfg.color} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.estRutaNombre}>{est.nombre}</Text>
+                  <Text style={styles.estRutaZona}>{est.zona}</Text>
+                </View>
+                {tipoViaje === 'vuelta' && est.estado === 'abordo' && (
+                  <TouchableOpacity style={styles.btnEntregado} onPress={() => {
+                    Alert.alert('Confirmar entrega', `¿Confirmas la entrega de ${est.nombre}?`, [
+                      { text: 'Cancelar', style: 'cancel' },
+                      { text: 'Confirmar', onPress: () => marcarEstado(est.id, 'entregado') },
+                    ]);
+                  }}><Text style={styles.btnEntregadoText}>Entregar</Text></TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function FilaInfoViaje({ icon, label, valor, last }) {
+  return (
+    <View style={[styles.filaInfo, !last && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}>
+      <View style={styles.filaInfoIcon}><Ionicons name={icon} size={15} color="#0D1B3E" /></View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.filaInfoLabel}>{label}</Text>
+        <Text style={styles.filaInfoValor}>{valor}</Text>
+      </View>
+    </View>
+  );
+}
+
+function MiniStat({ valor, label, color }) {
+  return (
+    <View style={styles.miniStatCard}>
+      <Text style={[styles.miniStatValor, { color }]}>{valor}</Text>
+      <Text style={styles.miniStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  body: { flexGrow: 1, paddingHorizontal: '6%', paddingTop: 24 },
+  sectionLabel: { fontSize: 12, fontWeight: '700', color: '#0D1B3E', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
+  divider: { height: 1, backgroundColor: '#E3ECF7', marginVertical: 4 },
+  miniStats: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  miniStatCard: { flex: 1, backgroundColor: '#F5F8FC', borderRadius: 14, borderWidth: 1.5, borderColor: '#E3ECF7', padding: 12, alignItems: 'center' },
+  miniStatValor: { fontSize: 22, fontWeight: 'bold' },
+  miniStatLabel: { fontSize: 10, color: '#888', marginTop: 2, textAlign: 'center' },
+  btnPrimary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FFD700', borderRadius: 16, paddingVertical: 15, marginBottom: 4 },
+  btnPrimaryText: { fontSize: 15, fontWeight: '700', color: '#0D1B3E' },
+  btnFinalizar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#0D1B3E', borderRadius: 16, paddingVertical: 15, marginTop: 20 },
+  btnFinalizarText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  btnWA: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#25D366', alignItems: 'center', justifyContent: 'center' },
+  estadoViajeBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 18, padding: 16, marginBottom: 20 },
+  bannerEspera: { backgroundColor: '#F5F8FC', borderWidth: 1.5, borderColor: '#E3ECF7' },
+  bannerActivo: { backgroundColor: '#0D1B3E' },
+  estadoPuntoGrande: { width: 16, height: 16, borderRadius: 8 },
+  puntoBusEspera: { backgroundColor: '#C8D6E5' },
+  puntoBusActivo: { backgroundColor: '#FFD700' },
+  estadoViajeTitle: { fontSize: 14, fontWeight: '700', color: '#0D1B3E' },
+  estadoViajeSub: { fontSize: 12, color: '#888', marginTop: 2 },
+  mapaContainer: { marginBottom: 4 },
+  mapaSimulado: { height: 200, backgroundColor: '#E8F0E8', borderRadius: 18, overflow: 'hidden', borderWidth: 1.5, borderColor: '#E3ECF7' },
+  customMarkerBus: { backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
+  customMarkerHito: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', elevation: 4 },
+  markerEmoji: { fontSize: 28 },
+  markerEmojiSmall: { fontSize: 14 },
+  mapaFooter: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8, marginBottom: 4 },
+  mapaFooterText: { fontSize: 11, color: '#888', fontStyle: 'italic' },
+  mapaInactivo: { height: 200, backgroundColor: '#F5F8FC', borderRadius: 18, borderWidth: 1.5, borderColor: '#E3ECF7', alignItems: 'center', justifyContent: 'center', paddingHorizontal: '10%' },
+  mapaInactivoTitle: { fontSize: 15, fontWeight: 'bold', color: '#0D1B3E', marginTop: 10 },
+  mapaInactivoDesc: { fontSize: 12, color: '#888', textAlign: 'center', marginTop: 4, lineHeight: 18 },
+  gpsBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#0D1B3E', borderRadius: 18, padding: 16, marginBottom: 16 },
+  gpsPunto: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#FFD700' },
+  gpsBannerTitle: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  gpsBannerSub: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  infoCard: { backgroundColor: '#F5F8FC', borderRadius: 18, borderWidth: 1.5, borderColor: '#E3ECF7', paddingHorizontal: 16, paddingVertical: 4, marginBottom: 4 },
+  filaInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  filaInfoIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E3ECF7' },
+  filaInfoLabel: { fontSize: 11, color: '#888', marginBottom: 1 },
+  filaInfoValor: { fontSize: 13, fontWeight: '600', color: '#0D1B3E' },
+  conductorRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  avatarMed: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#0D1B3E', alignItems: 'center', justifyContent: 'center' },
+  avatarMedText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  conductorNombre: { fontSize: 15, fontWeight: '700', color: '#0D1B3E' },
+  conductorSub: { fontSize: 12, color: '#888', marginTop: 2 },
+  hijoEstadoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  hijoAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#0D1B3E', alignItems: 'center', justifyContent: 'center' },
+  hijoAvatarText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  hijoNombre: { fontSize: 14, fontWeight: '600', color: '#0D1B3E', flex: 1 },
+  estadoChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 5, paddingHorizontal: 12, borderRadius: 20 },
+  estadoChipText: { fontSize: 11, fontWeight: '700' },
+  cameraContainer: { height: 220, borderRadius: 18, overflow: 'hidden', marginBottom: 16, borderWidth: 1.5, borderColor: '#E3ECF7' },
+  permisoContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 },
+  qrOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  qrFrame: { width: 140, height: 140, position: 'relative' },
+  qrCorner: { position: 'absolute', width: 20, height: 20, borderColor: '#FFD700', borderWidth: 3 },
+  qrCornerTL: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 4 },
+  qrCornerTR: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 4 },
+  qrCornerBL: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 4 },
+  qrCornerBR: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 4 },
+  btnAction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 16, paddingVertical: 15 },
+  btnActionText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  seccionAccion: { backgroundColor: '#fff', borderRadius: 18, padding: 4 },
+  seccionFin: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 12 },
+  finIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E6F9EE', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  finTitle: { fontSize: 20, fontWeight: 'bold', color: '#0D1B3E', marginBottom: 6 },
+  finDesc: { fontSize: 13, color: '#888', textAlign: 'center', lineHeight: 19, marginBottom: 16 },
+  estRutaRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
+  estRutaNombre: { fontSize: 14, fontWeight: '600', color: '#0D1B3E' },
+  estRutaZona: { fontSize: 11, color: '#888', marginTop: 1 },
+  btnEntregado: { backgroundColor: '#E6F9EE', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20 },
+  btnEntregadoText: { fontSize: 12, fontWeight: '700', color: '#16A34A' },
+});

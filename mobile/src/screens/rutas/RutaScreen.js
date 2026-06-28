@@ -1,52 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  StatusBar, ScrollView, TextInput, Alert
+  StatusBar, ScrollView, TextInput, Alert, ActivityIndicator
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-
-// ─── Datos de ejemplo ─────────────────────────────────────────────────────────
-const RUTA_PADRE_DEMO = {
-  conductor: {
-    nombre: 'Carlos Pérez',
-    telefono: '6500-1234',
-    vehiculo: 'Toyota Coaster 2020',
-    placa: 'BC-8888',
-    asientos: 30,
-    rating: 4.8,
-    reviews: 23,
-    verificado: true,
-  },
-  escuela: 'Colegio San Agustín',
-  zona: 'Arraiján',
-  frecuencia: 'Lunes a Viernes',
-  horario: '6:30 AM — 7:15 AM',
-  tarifa: 80,
-  mesActual: 3,
-  totalMeses: 10,
-  paradas: [
-    { orden: 1, descripcion: 'Punto de recogida — Casa del padre', hora: '6:30 AM' },
-    { orden: 2, descripcion: 'Parada 2 — Entrada de El Cangrejo', hora: '6:45 AM' },
-    { orden: 3, descripcion: 'Parada 3 — Cerca de Transístmica', hora: '6:55 AM' },
-    { orden: 4, descripcion: 'Destino — Colegio San Agustín', hora: '7:15 AM' },
-  ],
-  hijos: [
-    { id: 'h1', nombre: 'Sofía', estado: 'Activo' },
-  ],
-};
-
-const ESTUDIANTES_CONDUCTOR_DEMO = [
-  { id: 'e1', nombre: 'Sofía Rodríguez', zona: 'Arraiján', escuela: 'Colegio San Agustín', inputPos: '1' },
-  { id: 'e2', nombre: 'Mateo Coronado', zona: 'Vista Alegre', escuela: 'Colegio San Agustín', inputPos: '2' },
-  { id: 'e3', nombre: 'Ceferino JR', zona: 'Arraiján', escuela: 'Colegio San Agustín', inputPos: '3' },
-  { id: 'e4', nombre: 'Juanin Torres', zona: 'Nuevo Arraiján', escuela: 'Instituto Fermín Naudeau', inputPos: '4' },
-];
-
-const RUTAS_CONDUCTOR_DEMO = [
-  { id: 'r1', escuela: 'Colegio San Agustín', zona: 'Arraiján', zonas: ['Arraiján', 'Vista Alegre'], alumnos: 4, activa: true, horario: '6:30 AM — 7:15 AM' },
-  { id: 'r2', escuela: 'Instituto Fermín Naudeau', zona: 'La Chorrera', zonas: ['La Chorrera', 'Barrio Colón'], alumnos: 8, activa: true, horario: '6:00 AM — 7:00 AM' },
-];
+import { auth } from '../../config/firebase';
+import api from '../../config/api';
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function RutaScreen({ navigation, route }) {
@@ -88,139 +48,275 @@ export default function RutaScreen({ navigation, route }) {
 // VISTA PADRE
 // ══════════════════════════════════════════════════════════════════════════════
 function RutaPadre({ navigation, usuario }) {
-  const ruta = RUTA_PADRE_DEMO;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [ruta, setRuta] = useState(null);
+
+  useEffect(() => {
+    const fetchPadreRuta = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        
+        if (!auth.currentUser) {
+          setError('Por favor, inicia sesión para continuar.');
+          setLoading(false);
+          return;
+        }
+
+        const token = await auth.currentUser.getIdToken();
+
+        // 1. Obtener hijos del padre
+        const resHijos = await api.get('/api/padre/mis-hijos', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!resHijos.data || !resHijos.data.hijos || resHijos.data.hijos.length === 0) {
+          setError('No tienes hijos registrados actualmente.');
+          setLoading(false);
+          return;
+        }
+
+        const firstChild = resHijos.data.hijos[0];
+        const condId = firstChild.conductor_id;
+        
+        if (!condId) {
+          setRuta(null);
+          setLoading(false);
+          return;
+        }
+
+        // 2. Obtener el perfil y vehículo del conductor
+        let condInfo = null;
+        let vehiculoInfo = null;
+        try {
+          const resPerfil = await api.get(`/api/conductor/${condId}/perfil`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (resPerfil.data) {
+            condInfo = resPerfil.data.conductor;
+            vehiculoInfo = resPerfil.data.vehiculo;
+          }
+        } catch (err) {
+          console.log('Error al buscar perfil del conductor:', err.message);
+        }
+
+        // 3. Obtener la ruta del conductor
+        let rutaInfo = null;
+        try {
+          const resRuta = await api.get(`/api/conductor/${condId}/ruta`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (resRuta.data && resRuta.data.ruta) {
+            rutaInfo = resRuta.data.ruta;
+          }
+        } catch (err) {
+          console.log('Error al buscar ruta del conductor:', err.message);
+        }
+
+        if (!rutaInfo) {
+          setError('El conductor asignado no tiene una ruta configurada.');
+          setLoading(false);
+          return;
+        }
+
+        // Mapear hijos en esta ruta
+        const hijosList = resHijos.data.hijos.map(h => ({
+          id: h._id,
+          nombre: h.nombre,
+          estado: h.estado || 'Activo'
+        }));
+
+        // Mapear paradas de forma dinámica basada en el origen y destino
+        const paradasList = [
+          { orden: 1, descripcion: `Punto de recogida — Hogar de ${firstChild.nombre}`, hora: rutaInfo.horario?.split('—')[0]?.trim() || '6:30 AM' },
+          { orden: 2, descripcion: `Destino — ${rutaInfo.escuela}`, hora: rutaInfo.horario?.split('—')[1]?.trim() || '7:15 AM' }
+        ];
+
+        setRuta({
+          conductor: {
+            nombre: condInfo ? `${condInfo.nombre} ${condInfo.apellido}` : 'Carlos Pérez',
+            telefono: condInfo?.datos_conductor?.telefono || '6500-1234',
+            vehiculo: vehiculoInfo ? `${vehiculoInfo.marca} ${vehiculoInfo.modelo} (${vehiculoInfo.anio})` : 'Toyota Coaster 2020',
+            placa: vehiculoInfo?.placa || 'BC-8888',
+            asientos: vehiculoInfo?.num_asientos || 30,
+            rating: condInfo?.datos_conductor?.calificacion_promedio || 4.8,
+            reviews: condInfo?.datos_conductor?.total_reviews || 23,
+            verificado: condInfo?.estado === 'activo',
+          },
+          escuela: rutaInfo.escuela,
+          zona: rutaInfo.zona || 'Arraiján',
+          frecuencia: rutaInfo.frecuencia || 'Lunes a Viernes',
+          horario: rutaInfo.horario || '6:30 AM — 7:15 AM',
+          tarifa: condInfo?.datos_conductor?.tarifa || 80,
+          mesActual: 3, // Simulado por defecto
+          totalMeses: 10,
+          paradas: paradasList,
+          hijos: hijosList,
+        });
+
+      } catch (error) {
+        console.error('Error cargando ruta padre:', error);
+        setError('Error al conectar con el servidor.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPadreRuta();
+  }, [usuario]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+        <ActivityIndicator size="large" color="#0D1B3E" />
+        <Text style={{ marginTop: 10, color: '#888' }}>Cargando detalles de tu ruta...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <EstadoVacio
+        icon="alert-circle-outline"
+        titulo="Error al cargar la ruta"
+        desc={error}
+        btnTexto="Volver"
+        onPress={() => navigation.goBack()}
+      />
+    );
+  }
+
+  if (!ruta) {
+    return (
+      <EstadoVacio
+        icon="map-outline"
+        titulo="Sin ruta activa"
+        desc="Cuando contrates a un conductor desde el Marketplace, aquí verás la ruta fija de tu hijo."
+        btnTexto="Ir al Marketplace"
+        onPress={() => navigation.navigate('Marketplace', { usuario })}
+      />
+    );
+  }
+
   const progreso = (ruta.mesActual / ruta.totalMeses) * 100;
 
   return (
     <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-
-      {/* Sin contrato activo */}
-      {!ruta ? (
-        <EstadoVacio
-          icon="map-outline"
-          titulo="Sin ruta activa"
-          desc="Cuando contrates a un conductor desde el Marketplace, aquí verás la ruta fija de tu hijo."
-          btnTexto="Ir al Marketplace"
-          onPress={() => navigation.navigate('Marketplace', { usuario })}
-        />
-      ) : (
-        <>
-          {/* Tarjeta del conductor */}
-          <Text style={styles.sectionLabel}>Conductor asignado</Text>
-          <View style={styles.conductorCard}>
-            <View style={styles.conductorCardTop}>
-              <View style={styles.avatarGrande}>
-                <Text style={styles.avatarGrandeText}>{ruta.conductor.nombre.charAt(0)}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={styles.rowGap}>
-                  <Text style={styles.conductorNombre}>{ruta.conductor.nombre}</Text>
-                  {ruta.conductor.verificado && (
-                    <View style={styles.verificadoBadge}>
-                      <Ionicons name="shield-checkmark" size={11} color="#0D1B3E" />
-                      <Text style={styles.verificadoText}>Verificado</Text>
-                    </View>
-                  )}
+      {/* Tarjeta del conductor */}
+      <Text style={styles.sectionLabel}>Conductor asignado</Text>
+      <View style={styles.conductorCard}>
+        <View style={styles.conductorCardTop}>
+          <View style={styles.avatarGrande}>
+            <Text style={styles.avatarGrandeText}>{ruta.conductor.nombre.charAt(0)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={styles.rowGap}>
+              <Text style={styles.conductorNombre}>{ruta.conductor.nombre}</Text>
+              {ruta.conductor.verificado && (
+                <View style={styles.verificadoBadge}>
+                  <Ionicons name="shield-checkmark" size={11} color="#0D1B3E" />
+                  <Text style={styles.verificadoText}>Verificado</Text>
                 </View>
-                <View style={styles.starsRow}>
-                  {[1,2,3,4,5].map(s => (
-                    <Ionicons key={s} name={s <= Math.round(ruta.conductor.rating) ? 'star' : 'star-outline'} size={12} color="#FFD700" />
-                  ))}
-                  <Text style={styles.ratingTexto}>{ruta.conductor.rating} ({ruta.conductor.reviews} reseñas)</Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={styles.btnWhatsapp}
-                onPress={() => Alert.alert('WhatsApp', `Contactar a ${ruta.conductor.nombre}`)}
-              >
-                <Ionicons name="logo-whatsapp" size={18} color="#fff" />
-              </TouchableOpacity>
+              )}
             </View>
-
-            <View style={styles.divider} />
-
-            <FilaInfo icon="bus-outline" label="Vehículo" valor={ruta.conductor.vehiculo} />
-            <FilaInfo icon="card-outline" label="Placa" valor={ruta.conductor.placa} />
-            <FilaInfo icon="call-outline" label="Teléfono" valor={ruta.conductor.telefono} last />
+            <View style={styles.starsRow}>
+              {[1, 2, 3, 4, 5].map(s => (
+                <Ionicons key={s} name={s <= Math.round(ruta.conductor.rating) ? 'star' : 'star-outline'} size={12} color="#FFD700" />
+              ))}
+              <Text style={styles.ratingTexto}>{ruta.conductor.rating} ({ruta.conductor.reviews} reseñas)</Text>
+            </View>
           </View>
+          <TouchableOpacity
+            style={styles.btnWhatsapp}
+            onPress={() => Alert.alert('WhatsApp', `Contactar a ${ruta.conductor.nombre}`)}
+          >
+            <Ionicons name="logo-whatsapp" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
 
-          {/* Info de la ruta */}
-          <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Detalles de la ruta</Text>
-          <View style={styles.infoCard}>
-            <FilaInfo icon="school-outline" label="Escuela" valor={ruta.escuela} />
-            <FilaInfo icon="location-outline" label="Zona de recogida" valor={ruta.zona} />
-            <FilaInfo icon="time-outline" label="Horario" valor={ruta.horario} />
-            <FilaInfo icon="calendar-outline" label="Frecuencia" valor={ruta.frecuencia} />
-            <FilaInfo icon="card-outline" label="Tarifa mensual" valor={`$${ruta.tarifa}/mes`} last />
+        <View style={styles.divider} />
+
+        <FilaInfo icon="bus-outline" label="Vehículo" valor={ruta.conductor.vehiculo} />
+        <FilaInfo icon="card-outline" label="Placa" valor={ruta.conductor.placa} />
+        <FilaInfo icon="call-outline" label="Teléfono" valor={ruta.conductor.telefono} last />
+      </View>
+
+      {/* Info de la ruta */}
+      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Detalles de la ruta</Text>
+      <View style={styles.infoCard}>
+        <FilaInfo icon="school-outline" label="Escuela" valor={ruta.escuela} />
+        <FilaInfo icon="location-outline" label="Zona de recogida" valor={ruta.zona} />
+        <FilaInfo icon="time-outline" label="Horario" valor={ruta.horario} />
+        <FilaInfo icon="calendar-outline" label="Frecuencia" valor={ruta.frecuencia} />
+        <FilaInfo icon="card-outline" label="Tarifa mensual" valor={`$${ruta.tarifa}/mes`} last />
+      </View>
+
+      {/* Hijos en esta ruta */}
+      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+        {ruta.hijos.length === 1 ? 'Hijo en esta ruta' : 'Hijos en esta ruta'}
+      </Text>
+      <View style={styles.infoCard}>
+        {ruta.hijos.map((hijo, i) => (
+          <View
+            key={hijo.id}
+            style={[styles.hijoRow, i < ruta.hijos.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}
+          >
+            <View style={styles.hijoAvatar}>
+              <Text style={styles.hijoAvatarText}>{hijo.nombre.charAt(0)}</Text>
+            </View>
+            <Text style={styles.hijoNombre}>{hijo.nombre}</Text>
+            <View style={styles.estadoActivoBadge}>
+              <View style={styles.estadoPunto} />
+              <Text style={styles.estadoActivoText}>{hijo.estado}</Text>
+            </View>
           </View>
+        ))}
+      </View>
 
-          {/* Hijos en esta ruta */}
-          <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-            {ruta.hijos.length === 1 ? 'Hijo en esta ruta' : 'Hijos en esta ruta'}
-          </Text>
-          <View style={styles.infoCard}>
-            {ruta.hijos.map((hijo, i) => (
-              <View
-                key={hijo.id}
-                style={[styles.hijoRow, i < ruta.hijos.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}
-              >
-                <View style={styles.hijoAvatar}>
-                  <Text style={styles.hijoAvatarText}>{hijo.nombre.charAt(0)}</Text>
-                </View>
-                <Text style={styles.hijoNombre}>{hijo.nombre}</Text>
-                <View style={styles.estadoActivoBadge}>
-                  <View style={styles.estadoPunto} />
-                  <Text style={styles.estadoActivoText}>{hijo.estado}</Text>
-                </View>
+      {/* Paradas */}
+      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Recorrido</Text>
+      <View style={styles.paradasCard}>
+        {ruta.paradas.map((parada, i) => {
+          const esUltima = i === ruta.paradas.length - 1;
+          const esPrimera = i === 0;
+          return (
+            <View key={i} style={styles.paradaRow}>
+              {/* Línea de tiempo */}
+              <View style={styles.paradaTimeline}>
+                <View style={[
+                  styles.paradaPunto,
+                  esPrimera && styles.paradaPuntoPrimero,
+                  esUltima && styles.paradaPuntoUltimo,
+                ]} />
+                {!esUltima && <View style={styles.paradaLinea} />}
               </View>
-            ))}
-          </View>
-
-          {/* Paradas */}
-          <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Recorrido</Text>
-          <View style={styles.paradasCard}>
-            {ruta.paradas.map((parada, i) => {
-              const esUltima = i === ruta.paradas.length - 1;
-              const esPrimera = i === 0;
-              return (
-                <View key={i} style={styles.paradaRow}>
-                  {/* Línea de tiempo */}
-                  <View style={styles.paradaTimeline}>
-                    <View style={[
-                      styles.paradaPunto,
-                      esPrimera && styles.paradaPuntoPrimero,
-                      esUltima && styles.paradaPuntoUltimo,
-                    ]} />
-                    {!esUltima && <View style={styles.paradaLinea} />}
-                  </View>
-                  {/* Contenido */}
-                  <View style={styles.paradaContenido}>
-                    <Text style={[styles.paradaDesc, (esPrimera || esUltima) && { fontWeight: '700', color: '#0D1B3E' }]}>
-                      {parada.descripcion}
-                    </Text>
-                    <Text style={styles.paradaHora}>{parada.hora}</Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-
-          {/* Progreso del contrato */}
-          <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Contrato activo</Text>
-          <View style={styles.contratoCard}>
-            <View style={styles.contratoHeader}>
-              <Text style={styles.contratoMes}>Mes {ruta.mesActual} de {ruta.totalMeses}</Text>
-              <Text style={styles.contratoPct}>{Math.round(progreso)}%</Text>
+              {/* Contenido */}
+              <View style={styles.paradaContenido}>
+                <Text style={[styles.paradaDesc, (esPrimera || esUltima) && { fontWeight: '700', color: '#0D1B3E' }]}>
+                  {parada.descripcion}
+                </Text>
+                <Text style={styles.paradaHora}>{parada.hora}</Text>
+              </View>
             </View>
-            <View style={styles.barraBase}>
-              <View style={[styles.barraRelleno, { width: `${progreso}%` }]} />
-            </View>
-            <Text style={styles.contratoNote}>
-              Quedan {ruta.totalMeses - ruta.mesActual} meses para completar el contrato.
-            </Text>
-          </View>
-        </>
-      )}
+          );
+        })}
+      </View>
+
+      {/* Progreso del contrato */}
+      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Contrato activo</Text>
+      <View style={styles.contratoCard}>
+        <View style={styles.contratoHeader}>
+          <Text style={styles.contratoMes}>Mes {ruta.mesActual} de {ruta.totalMeses}</Text>
+          <Text style={styles.contratoPct}>{Math.round(progreso)}%</Text>
+        </View>
+        <View style={styles.barraBase}>
+          <View style={[styles.barraRelleno, { width: `${progreso}%` }]} />
+        </View>
+        <Text style={styles.contratoNote}>
+          Quedan {ruta.totalMeses - ruta.mesActual} meses para completar el contrato.
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -229,10 +325,75 @@ function RutaPadre({ navigation, usuario }) {
 // VISTA CONDUCTOR
 // ══════════════════════════════════════════════════════════════════════════════
 function RutaConductor({ navigation, usuario }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [rutaSeleccionada, setRutaSeleccionada] = useState(null);
   const [editando, setEditando] = useState(false);
-  const [estudiantes, setEstudiantes] = useState(ESTUDIANTES_CONDUCTOR_DEMO);
-  const [rutas] = useState(RUTAS_CONDUCTOR_DEMO);
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [rutas, setRutas] = useState([]);
+
+  useEffect(() => {
+    const fetchConductorRutaYEstudiantes = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        if (!auth.currentUser) {
+          setError('Por favor, inicia sesión para continuar.');
+          setLoading(false);
+          return;
+        }
+
+        const token = await auth.currentUser.getIdToken();
+
+        // 1. Obtener la ruta del conductor
+        const resRuta = await api.get('/api/conductor/ruta', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        // 2. Obtener estudiantes asignados
+        const resEst = await api.get('/api/conductor/estudiantes', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const estudiantesObtenidos = resEst.data?.estudiantes || [];
+        const mappedEstudiantes = estudiantesObtenidos.map((e, idx) => ({
+          id: e._id,
+          nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
+          zona: e.zona || 'Arraiján',
+          escuela: e.escuela || resRuta.data?.ruta?.escuela || 'Colegio San Agustín',
+          inputPos: (idx + 1).toString(),
+        }));
+
+        setEstudiantes(mappedEstudiantes);
+
+        if (resRuta.data && resRuta.data.ruta) {
+          const r = resRuta.data.ruta;
+          const mappedRuta = {
+            id: r._id,
+            escuela: r.escuela,
+            zona: r.zona || 'Arraiján',
+            zonas: r.zona ? [r.zona] : ['Arraiján'],
+            alumnos: mappedEstudiantes.length,
+            activa: r.estado === 'activa',
+            horario: r.horario || '6:30 AM — 7:15 AM',
+            nombre: r.nombre
+          };
+          setRutas([mappedRuta]);
+        } else {
+          setRutas([]);
+        }
+
+      } catch (err) {
+        console.error('Error cargando datos del conductor:', err);
+        setError('Error al obtener la información de tu ruta.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchConductorRutaYEstudiantes();
+  }, [usuario]);
 
   const moverEstudiante = (index, direccion) => {
     const nuevas = [...estudiantes];
@@ -256,6 +417,27 @@ function RutaConductor({ navigation, usuario }) {
     nuevas.forEach((e, i) => { e.inputPos = (i + 1).toString(); });
     setEstudiantes(nuevas);
   };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+        <ActivityIndicator size="large" color="#0D1B3E" />
+        <Text style={{ marginTop: 10, color: '#888' }}>Cargando tus rutas...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <EstadoVacio
+        icon="alert-circle-outline"
+        titulo="Error al cargar la ruta"
+        desc={error}
+        btnTexto="Volver"
+        onPress={() => navigation.goBack()}
+      />
+    );
+  }
 
   // ── Detalle de ruta seleccionada ──────────────────────────────────────────
   if (rutaSeleccionada) {
@@ -532,7 +714,7 @@ const styles = StyleSheet.create({
   hijoAvatarText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   hijoNombre: { fontSize: 14, fontWeight: '600', color: '#0D1B3E', flex: 1 },
   estadoActivoBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#E6F9EE', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20 },
-  estadoPunto: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#ccc' },
+  estadoPunto: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#16A34A' },
   estadoActivoText: { fontSize: 11, fontWeight: '700', color: '#16A34A' },
 
   // Paradas
