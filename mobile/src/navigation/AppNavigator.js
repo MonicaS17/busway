@@ -13,10 +13,8 @@ import MarketplaceScreen from '../screens/MarketplaceScreen';
 import NotificacionesConductorScreen from '../screens/NotificacionesConductorScreen';
 import AvisosPadreScreen from '../screens/AvisosPadreScreen';
 import PaymentsScreen from '../screens/PaymentsScreen';
-import PreviaRutaConductor from '../screens/PreviaRutaConductor';
-import PreviaRutaPadre from '../screens/PreviaRutaPadre';
-import RutaScreen from '../screens/RutaScreen';
-import ViajeScreen from '../screens/ViajeScreen';
+import RutaScreen from '../screens/rutas/RutaScreen';
+import ViajeScreen from '../screens/rutas/ViajeScreen';
 
 const Stack = createStackNavigator();
 
@@ -37,8 +35,6 @@ export default function AppNavigator() {
         <Stack.Screen name="Notificaciones" component={NotificacionesConductorScreen} />
         <Stack.Screen name="Avisos" component={AvisosPadreScreen} />
         <Stack.Screen name="Pagos" component={PaymentsScreen} />
-        <Stack.Screen name="PreviaRutaConductor" component={PreviaRutaConductor} />
-        <Stack.Screen name="PreviaRutaPadre" component={PreviaRutaPadre} />
         <Stack.Screen name="Ruta" component={RutaScreen} />
         <Stack.Screen name="Viaje" component={ViajeScreen} />
       </Stack.Navigator>
