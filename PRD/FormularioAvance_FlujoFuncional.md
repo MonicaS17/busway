@@ -10,12 +10,12 @@ BusWay es una plataforma digital de transporte escolar para Panamá que conecta 
 
 # **2\. Integrantes del equipo de trabajo**
 
-| Nombre y Apellido | Cédula | Rol | Aporte en el Desarrollo del Proyecto |
-| :---: | :---: | :---: | :---: |
-| Coronado, Liliana | 6-727-983 | Desarrolladora | Investigación, diseño de BD y módulo de pagos |
-| Pimentel, Yarlenis | 4-828-1122 | Desarrolladora | Módulo de notificaciones y seguimiento GPS |
-| Sánchez, Grace | 8-1033-248 | Desarrolladora | Módulo de marketplace y solicitudes |
-| Serrano, Mónica | 8-1020-102 | Desarrolladora | Arquitectura del sistema, autenticación, OCR y panel web |
+| Nombre y Apellido | Rol | Aporte en el Desarrollo del Proyecto |
+| :---: | :---: | :---: |
+| Coronado, Liliana | Desarrolladora | Investigación, diseño de BD y módulo de pagos |
+| Pimentel, Yarlenis | Desarrolladora | Módulo de notificaciones y seguimiento GPS |
+| Sánchez, Grace | Desarrolladora | Módulo de marketplace y solicitudes |
+| Serrano, Mónica | Desarrolladora | Arquitectura del sistema, autenticación, OCR y panel web |
 
 # **3\. Objetivo del Sistema**
 
