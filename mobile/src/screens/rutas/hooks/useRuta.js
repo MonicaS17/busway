@@ -118,11 +118,30 @@ export default function useRuta({ usuario, esPadre }) {
           const r = resRuta.data.ruta;
           setRutaInfo(r);
 
-          const resEst = await api.get('/api/conductor/estudiantes', {
-            headers: { Authorization: `Bearer ${idToken}` }
-          });
-          const estudiantesObtenidos = resEst.data?.estudiantes || [];
-          setEstudiantes(estudiantesObtenidos);
+          let estudiantesList = [];
+          if (resRuta.data && resRuta.data.estudiantes && resRuta.data.estudiantes.length > 0) {
+            estudiantesList = resRuta.data.estudiantes.map((e, idx) => ({
+              ...e,
+              id: e._id,
+              _id: e._id,
+              orden: e.orden || (idx + 1)
+            }));
+          }
+
+          if (estudiantesList.length > 0) {
+            setEstudiantes(estudiantesList);
+          } else {
+            const resEst = await api.get('/api/conductor/estudiantes', {
+              headers: { Authorization: `Bearer ${idToken}` }
+            });
+            const estudiantesObtenidos = resEst.data?.estudiantes || [];
+            setEstudiantes(estudiantesObtenidos.map((e, idx) => ({
+              ...e,
+              id: e._id,
+              _id: e._id,
+              orden: idx + 1
+            })));
+          }
 
           try {
             const resViaje = await api.get('/api/viajes/activo/conductor', {
