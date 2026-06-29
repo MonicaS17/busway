@@ -91,7 +91,7 @@ export default function PadreDashboard() {
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-5 py-4 text-slate-600">{p.fecha}</td>
                   <td className="px-5 py-4 font-extrabold text-navy">{p.monto}</td>
-                  <td className="px-5 py-4 text-slate-600">{p.detalle}</td>
+                  <td className="px-5 py-4 text-slate-600">Mes {p.mesContrato} · {p.conductor}</td>
                   <td className="px-5 py-4">
                     <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
                       {p.estado}

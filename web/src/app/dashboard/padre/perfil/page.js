@@ -103,12 +103,14 @@ export default function PadrePerfilPage() {
                 hijos.map((h) => (
                   <div key={h._id} className="rounded-md border border-slate-200 px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-extrabold text-navy">{h.nombre} {h.apellido}</p>
+                      <p className="font-extrabold text-navy">{h.nombre}</p>
                       <span className="rounded-full bg-busway-yellow px-2.5 py-1 text-[11px] font-extrabold text-navy">
                         {h.estado}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">{h.escuela}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {h.conductor_id ? `Conductor: ${h.conductor_id.nombre} ${h.conductor_id.apellido}` : 'Sin conductor asignado'}
+                    </p>
                   </div>
                 ))
               )}
