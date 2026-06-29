@@ -14,10 +14,12 @@ const escuelaSchema = new mongoose.Schema({
 
 const Escuela = mongoose.model('escuelas', escuelaSchema);
 
-// GET todas las escuelas
-router.get('/', verifyToken, async (req, res) => {
+// GET todas las escuelas activas (público)
+router.get('/', async (req, res) => {
   try {
-    const escuelas = await Escuela.find().sort({ fecha_registro: -1 });
+    const escuelas = await Escuela.find({
+      estado: { $in: ['activa', 'Activa'] }
+    }).select('_id nombre').sort({ nombre: 1 });
     res.json({ escuelas });
   } catch (error) {
     res.status(500).json({ error: 'Error interno del servidor' });
