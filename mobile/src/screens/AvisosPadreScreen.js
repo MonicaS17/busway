@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
   StyleSheet, StatusBar, RefreshControl, ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -30,6 +31,7 @@ export default function AvisosPadreScreen({ navigation }) {
   const [expandida, setExpandida] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
+  const [marcandoTodas, setMarcandoTodas] = useState(false);
 
   const sinLeer = notificaciones.filter((n) => !n.leida).length;
 
@@ -93,6 +95,28 @@ export default function AvisosPadreScreen({ navigation }) {
     marcarLeida(id);
   };
 
+  const marcarTodasLeidas = async () => {
+    const pendientes = notificaciones.filter((n) => !n.leida).map((n) => n._id);
+    if (pendientes.length === 0 || marcandoTodas) return;
+
+    setMarcandoTodas(true);
+    setNotificaciones((prev) => prev.map((n) => ({ ...n, leida: true })));
+    try {
+      const token = await tokenAuth();
+      await api.patch('/api/notificaciones/padre/marcar-leidas/todas', {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (error) {
+      const pendientesSet = new Set(pendientes);
+      setNotificaciones((prev) => prev.map((n) => (
+        pendientesSet.has(n._id) ? { ...n, leida: false } : n
+      )));
+      Alert.alert('Error', error.response?.data?.error || 'No se pudieron marcar los avisos.');
+    } finally {
+      setMarcandoTodas(false);
+    }
+  };
+
   const refrescar = () => {
     setRefrescando(true);
     cargarNotificaciones();
@@ -130,7 +154,20 @@ export default function AvisosPadreScreen({ navigation }) {
             ) : (
               <Text style={s.subSub}>Todo al día</Text>
             )}
-
+            {sinLeer > 0 && (
+              <TouchableOpacity
+                style={s.markAllButton}
+                onPress={marcarTodasLeidas}
+                disabled={marcandoTodas}
+                activeOpacity={0.8}
+              >
+                {marcandoTodas ? (
+                  <ActivityIndicator size="small" color="#007DB8" />
+                ) : (
+                  <Text style={s.markAllText}>Marcar todas como leídas</Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -274,6 +311,8 @@ const s = StyleSheet.create({
     gap: 12,
   },
   subSub: { fontSize: 12, color: '#8A94A6' },
+  markAllButton: { minHeight: 32, justifyContent: 'center', alignItems: 'flex-end' },
+  markAllText: { fontSize: 12, color: '#007DB8', fontWeight: '700' },
   body: { paddingHorizontal: '6%', paddingTop: 16, paddingBottom: 32, gap: 10 },
   loadingBox: { alignItems: 'center', paddingTop: 60, gap: 10 },
   loadingText: { fontSize: 13, color: '#8A94A6' },
