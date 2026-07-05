@@ -1,14 +1,9 @@
-const admin = require('firebase-admin');
 const mongoose = require('mongoose');
 
+let admin;
 let hasFirebase = false;
 try {
-  const serviceAccount = require('../serviceAccount.json');
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-  }
+  admin = require('../config/firebaseAdmin');
   hasFirebase = true;
 } catch (e) {
   console.warn("⚠️ Firebase Admin credentials not found. Using Mock Auth mode.");
@@ -26,15 +21,20 @@ const verifyToken = async (req, res, next) => {
     const token = authHeader.split('Bearer ')[1];
     let decodedToken = null;
 
-    if (token.startsWith('mock_token_for_')) {
+    // Solo permitir tokens mock explícitamente cuando la variable de entorno esté activada.
+    if (process.env.ALLOW_MOCK_TOKENS === 'true' && token.startsWith('mock_token_for_')) {
+      // Formato: mock_token_for_<uid>
       const uid = token.replace('mock_token_for_', '');
       decodedToken = { uid };
-    } else if (hasFirebase) {
-      decodedToken = await admin.auth().verifyIdToken(token);
     } else {
-      // Si no hay Firebase y no es un mock prefijado, lo tratamos como mock uid directo
-      decodedToken = { uid: token };
+      if (!hasFirebase) {
+        throw new Error('Firebase Auth is required but not configured.');
+      }
+      // Autenticación real: delegar a Firebase Admin
+      decodedToken = await admin.auth().verifyIdToken(token);
     }
+
+    console.log('[verifyToken] ', req.method, req.path, 'uid=', decodedToken?.uid, 'mockAllowed=', process.env.ALLOW_MOCK_TOKENS === 'true');
 
     // Enriquecer req.user con datos de la BD de MongoDB
     const Usuario = mongoose.model('usuarios');
@@ -47,6 +47,8 @@ const verifyToken = async (req, res, next) => {
         decodedToken.uid = dbUser.firebase_uid;
       }
     }
+
+    console.log('[verifyToken] decodedUid=', decodedToken?.uid, 'email=', decodedToken?.email, 'dbUser=', dbUser ? `${dbUser._id.toString()}(${dbUser.tipo})` : 'null');
 
     if (!dbUser) {
       // Si no existe, dejamos continuar (ej. para registro)

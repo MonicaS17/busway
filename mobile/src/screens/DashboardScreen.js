@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import api from '../config/api';
+import { registerAndSaveTokenAsync, addNotificationReceivedListener } from '../utils/notifications';
 
 export default function DashboardScreen({ navigation, route }) {
   const { usuario } = route.params;
@@ -24,6 +25,7 @@ export default function DashboardScreen({ navigation, route }) {
   const cargarAvisosSinLeer = useCallback(async () => {
     if (usuario.tipo !== 'padre') return;
     try {
+      if (!auth.currentUser) return;
       const token = await auth.currentUser.getIdToken();
       const response = await api.get('/api/notificaciones/padre', {
         headers: { Authorization: `Bearer ${token}` },
@@ -46,6 +48,26 @@ export default function DashboardScreen({ navigation, route }) {
     if (usuario.tipo !== 'padre') return undefined;
     const intervalo = setInterval(cargarAvisosSinLeer, 8000);
     return () => clearInterval(intervalo);
+  }, [cargarAvisosSinLeer, usuario.tipo]);
+
+  useEffect(() => {
+    // Registrar token FCM al iniciar la sesión en Dashboard
+    registerAndSaveTokenAsync();
+
+    // Escuchar notificaciones en foreground
+    const subscription = addNotificationReceivedListener((notification) => {
+      const { title, body } = notification.request.content;
+      Alert.alert(title || 'Notificación', body || '');
+      if (usuario.tipo === 'padre') {
+        cargarAvisosSinLeer();
+      }
+    });
+
+    return () => {
+      if (subscription && typeof subscription.remove === 'function') {
+        subscription.remove();
+      }
+    };
   }, [cargarAvisosSinLeer, usuario.tipo]);
 
   const handleLogout = async () => {
@@ -74,14 +96,14 @@ export default function DashboardScreen({ navigation, route }) {
 
   const menuConductor = [
     { icon: 'document-text-outline', label: 'Solicitudes', desc: 'Padres interesados en tu ruta', screen: 'Marketplace' },
-    { icon: 'map-outline', label: 'Rutas', desc: 'Ver y gestionar tu ruta', screen: 'Rutas' },
+    { icon: 'map-outline', label: 'Rutas', desc: 'Ver y gestionar tu ruta', screen: 'Ruta' },
     { icon: 'notifications-outline', label: 'Notificaciones', desc: 'Avisa a tus padres', screen: 'Notificaciones' },
     { icon: 'card-outline', label: 'Pagos', desc: 'Tus cobros mensuales', screen: 'Pagos' },
   ];
 
   const menuPadre = [
     { icon: 'storefront-outline', label: 'Marketplace', desc: 'Busca un conductor', screen: 'Marketplace' },
-    { icon: 'map-outline', label: 'Rutas', desc: 'Ver tu ruta', screen: 'Rutas' },
+    { icon: 'map-outline', label: 'Rutas', desc: 'Ver tu ruta', screen: 'Ruta' },
     { icon: 'qr-code-outline', label: 'Hijos y QR', desc: 'Gestiona a tus hijos', screen: 'HijosQR' },
     { icon: 'card-outline', label: 'Pagos', desc: 'Tu historial mensual', screen: 'Pagos'  },
   ];
@@ -90,7 +112,7 @@ export default function DashboardScreen({ navigation, route }) {
 
   const tabs = [
     { icon: 'home-outline', label: 'Inicio', active: true },
-    { icon: 'location-outline', label: 'Viajes', onPress: () => navigation.navigate('Viajes', { usuario }) },
+    { icon: 'location-outline', label: 'Viajes', onPress: () => navigation.navigate('Viaje', { usuario }) },
     {
       icon: 'notifications-outline',
       label: 'Avisos',

@@ -32,16 +32,39 @@ export default function AvisosPadreScreen({ navigation }) {
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [marcandoTodas, setMarcandoTodas] = useState(false);
+  const [hijos, setHijos] = useState([]);
+  const [selectedHijoId, setSelectedHijoId] = useState(null);
 
   const sinLeer = notificaciones.filter((n) => !n.leida).length;
 
-  const tokenAuth = async () => auth.currentUser.getIdToken();
+  const tokenAuth = async () => auth.currentUser ? auth.currentUser.getIdToken() : '';
 
   const cargarNotificaciones = useCallback(async ({ mostrarCarga = false, silencioso = false } = {}) => {
     if (mostrarCarga) setCargando(true);
     try {
+      if (!auth.currentUser) return;
       const token = await tokenAuth();
-      const response = await api.get('/api/notificaciones/padre', {
+
+      // Cargar hijos primero si no están cargados
+      let currentHijoId = selectedHijoId;
+      if (hijos.length === 0) {
+        const resHijos = await api.get('/api/padre/mis-hijos', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (resHijos.data && resHijos.data.hijos) {
+          setHijos(resHijos.data.hijos);
+          if (resHijos.data.hijos.length > 0) {
+            currentHijoId = resHijos.data.hijos[0]._id;
+            setSelectedHijoId(currentHijoId);
+          }
+        }
+      }
+
+      const url = currentHijoId 
+        ? `/api/notificaciones/padre?estudiante_id=${currentHijoId}`
+        : '/api/notificaciones/padre';
+
+      const response = await api.get(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const nuevas = response.data.notificaciones || [];
@@ -54,7 +77,13 @@ export default function AvisosPadreScreen({ navigation }) {
       setCargando(false);
       setRefrescando(false);
     }
-  }, []);
+  }, [selectedHijoId, hijos.length]);
+
+  useEffect(() => {
+    if (selectedHijoId) {
+      cargarNotificaciones({ mostrarCarga: true });
+    }
+  }, [selectedHijoId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -145,6 +174,25 @@ export default function AvisosPadreScreen({ navigation }) {
       </View>
 
       <View style={s.card}>
+        {hijos.length > 1 && (
+          <View style={s.hijosTabsContainer}>
+            {hijos.map((h) => {
+              const active = h._id === selectedHijoId;
+              return (
+                <TouchableOpacity
+                  key={h._id}
+                  style={[s.hijoTab, active && s.hijoTabActive]}
+                  onPress={() => setSelectedHijoId(h._id)}
+                >
+                  <Ionicons name="person-outline" size={14} color={active ? '#0D1B3E' : '#888'} />
+                  <Text style={[s.hijoTabText, active && s.hijoTabTextActive]}>
+                    {h.nombre}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
         <View style={s.subHeader}>
           <Text style={s.subTitle}>Notificaciones recibidas</Text>
 
@@ -356,4 +404,37 @@ const s = StyleSheet.create({
   emptyBox: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyText: { fontSize: 15, color: '#8A94A6', fontWeight: '600' },
   emptySub: { fontSize: 12, color: '#AEB7C4', textAlign: 'center', paddingHorizontal: 32 },
+  hijosTabsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: '6%',
+    paddingVertical: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4FA',
+    backgroundColor: '#fff',
+  },
+  hijoTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: '#F5F8FC',
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    gap: 4,
+  },
+  hijoTabActive: {
+    backgroundColor: '#FFD700',
+    borderColor: '#FFD700',
+  },
+  hijoTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888',
+  },
+  hijoTabTextActive: {
+    color: '#0D1B3E',
+    fontWeight: '700',
+  },
 });

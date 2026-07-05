@@ -15,13 +15,11 @@ const conductorRoutes = require('./routes/conductor'); // origin/main: ya no nec
 const padresRoutes = require('./routes/padres');
 const escuelasRoutes = require('./routes/escuelas');
 const pagosRoutes = require('./routes/pagos');
+const adminRoutes = require('./routes/admin');
+const notificacionesRoutes = require('./routes/notificaciones');
 
 // socketHandler para manejar eventos de Socket.IO (asistencia y GPS)
 const socketHandler = require('./sockets/socketHandler');
-const conductorRoutes = require('./routes/conductor'); // <-- ¡Limpiado aquí! Ya no necesita el { router: ... }
-const padreRoutes = require('./routes/padres');
-const adminRoutes = require('./routes/admin');
-const notificacionesRoutes = require('./routes/notificaciones');
 
 const app = express();
 
@@ -46,8 +44,6 @@ app.use('/api/conductor', conductorRoutes);
 app.use('/api/padre', padresRoutes);
 app.use('/api/escuelas', escuelasRoutes);
 app.use('/api/pagos', pagosRoutes);
-app.use('/api/conductor', conductorRoutes);
-app.use('/api/padre', padreRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notificaciones', notificacionesRoutes);
 
