@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/verifyToken');
+const mongoose = require('mongoose');
 
 const Usuario = require('../models/Usuario');
 const Vehiculo = require('../models/Vehiculo');
@@ -123,20 +124,16 @@ router.get('/ruta', verifyToken, async (req, res) => {
 
 // GET detalle de una ruta específica
 router.get('/ruta/:rutaId', verifyToken, async (req, res) => {
+  console.log('[conductor route] GET /ruta/:rutaId', req.params.rutaId, 'uid=', req.user?.uid, 'tipo=', req.user?.tipo);
   try {
     const Ruta = require('../models/Ruta');
     const Estudiante = require('../models/Estudiante');
     const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
     if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    const ruta = await Ruta.findById(req.params.rutaId).populate('escuela_id');
+    const ruta = await Ruta.findOne({ _id: req.params.rutaId, conductor_id: usuario._id }).populate('escuela_id');
     if (!ruta) {
-      return res.status(404).json({ error: 'Ruta no encontrada' });
-    }
-
-    // Verificar que el conductor es el dueño
-    if (String(ruta.conductor_id) !== String(usuario._id)) {
-      return res.status(403).json({ error: 'No tienes permiso para ver esta ruta' });
+      return res.status(404).json({ error: 'Ruta no encontrada o no te pertenece' });
     }
 
     const doc = ruta.toObject();
@@ -147,7 +144,8 @@ router.get('/ruta/:rutaId', verifyToken, async (req, res) => {
     }
 
     // Consultar estudiantes de la colección Estudiante filtrando por ruta_id
-    const studentsFromDb = await Estudiante.find({ conductor_id: usuario._id, ruta_id: req.params.rutaId });
+    const studentsFromDb = await Estudiante.find({ ruta_id: req.params.rutaId });
+
     // Ordenar estudiantes según el orden almacenado en la ruta
     const orderMap = {};
     if (ruta.estudiantes) {
@@ -161,7 +159,11 @@ router.get('/ruta/:rutaId', verifyToken, async (req, res) => {
       return sDoc;
     }).sort((a, b) => a.orden - b.orden);
 
-    res.json({ ruta: doc, estudiantes: sortedStudents });
+    res.json({
+      ruta: doc,
+      estudiantes: sortedStudents,
+      totalEstudiantes: sortedStudents.length
+    });
   } catch (error) {
     console.error('Error al obtener detalle de la ruta:', error);
     res.status(500).json({ error: 'Error interno al obtener detalle de la ruta' });
@@ -296,9 +298,18 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
 // GET ruta de un conductor por su ID (usado por padres)
 router.get('/:id/ruta', verifyToken, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'ID de conductor inválido' });
+    }
     const Ruta = require('../models/Ruta');
     const Estudiante = require('../models/Estudiante');
-    const ruta = await Ruta.findOne({ conductor_id: req.params.id }).populate('escuela_id');
+    
+    const filter = { conductor_id: req.params.id };
+    if (req.query.ruta_id) {
+      filter._id = req.query.ruta_id;
+    }
+    
+    const ruta = await Ruta.findOne(filter).populate('escuela_id');
     if (!ruta) {
       return res.json({ ruta: null, mensaje: 'El conductor no tiene una ruta asignada actualmente.' });
     }
@@ -332,7 +343,11 @@ router.get('/:id/ruta', verifyToken, async (req, res) => {
 
 // GET perfil de un conductor por su ID (usado por padres)
 router.get('/:id/perfil', verifyToken, async (req, res) => {
+  console.log('[conductor route] GET /:id/perfil', req.params.id, 'uid=', req.user?.uid, 'tipo=', req.user?.tipo);
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'ID de conductor inválido' });
+    }
     const conductor = await Usuario.findById(req.params.id);
     if (!conductor || conductor.tipo !== 'conductor') {
       return res.status(404).json({ error: 'Conductor no encontrado' });
@@ -344,7 +359,6 @@ router.get('/:id/perfil', verifyToken, async (req, res) => {
   }
 });
 
-module.exports = router;
 router.get('/rutas', verifyToken, async (req, res) => {
   try {
     const conductor = await conductorAutenticado(req, res);
@@ -424,7 +438,7 @@ router.patch('/viajes/:id/asistencia', verifyToken, async (req, res) => {
     const viaje = await Viaje.findOneAndUpdate(
       { _id: req.params.id, conductor_id: conductor._id, estado: 'en_curso' },
       actualizacion,
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!viaje) return res.status(404).json({ error: 'Viaje activo no encontrado' });
     res.json({ viaje });
@@ -440,12 +454,47 @@ router.patch('/viajes/:id/finalizar', verifyToken, async (req, res) => {
     const viaje = await Viaje.findOneAndUpdate(
       { _id: req.params.id, conductor_id: conductor._id, estado: 'en_curso' },
       { estado: 'finalizado', hora_llegada: new Date(), estudiantes_abordo: [] },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!viaje) return res.status(404).json({ error: 'Viaje activo no encontrado' });
     res.json({ viaje });
   } catch (error) {
     res.status(500).json({ error: 'No se pudo finalizar el viaje' });
+  }
+});
+
+// PATCH asignar ruta a un estudiante
+router.patch('/estudiante/:estudianteId/ruta', verifyToken, async (req, res) => {
+  try {
+    const { ruta_id } = req.body;
+    const { estudianteId } = req.params;
+
+    const conductor = await Usuario.findOne({ firebase_uid: req.user.uid });
+    if (!conductor || conductor.tipo !== 'conductor') {
+      return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    // Verificar que el estudiante esté asignado a este conductor
+    const estudiante = await Estudiante.findOne({ _id: estudianteId, conductor_id: conductor._id });
+    if (!estudiante) {
+      return res.status(404).json({ error: 'Estudiante no encontrado o no asignado a ti' });
+    }
+
+    // Si se pasa ruta_id, verificar que la ruta existe y pertenece a este conductor
+    if (ruta_id) {
+      const ruta = await Ruta.findOne({ _id: ruta_id, conductor_id: conductor._id });
+      if (!ruta) {
+        return res.status(404).json({ error: 'Ruta no encontrada o no te pertenece' });
+      }
+    }
+
+    estudiante.ruta_id = ruta_id || null;
+    await estudiante.save();
+
+    res.json({ mensaje: 'Ruta asignada al estudiante con éxito', estudiante });
+  } catch (error) {
+    console.error('Error al asignar ruta al estudiante:', error);
+    res.status(500).json({ error: 'Error interno al asignar ruta al estudiante' });
   }
 });
 

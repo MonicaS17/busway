@@ -186,7 +186,7 @@ router.patch('/usuarios/:id/estado', verifyToken, requireRole('administrador'), 
     const usuario = await Usuario.findOneAndUpdate(
       { _id: req.params.id, tipo: { $in: ['conductor', 'padre'] } },
       { estado },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!usuario) return res.status(404).json({ error: 'Cuenta de conductor o padre no encontrada' });
     await Log.create({
@@ -197,6 +197,36 @@ router.patch('/usuarios/:id/estado', verifyToken, requireRole('administrador'), 
     res.json({ mensaje: 'Estado actualizado', usuario });
   } catch (error) {
     res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// PATCH actualizar token FCM del usuario
+router.patch('/fcm-token', verifyToken, async (req, res) => {
+  try {
+    const { fcmToken } = req.body;
+    if (fcmToken === undefined) {
+      return res.status(400).json({ error: 'fcmToken es obligatorio' });
+    }
+
+    const updateQuery = { fcmToken: fcmToken };
+    if (fcmToken) {
+      updateQuery.$addToSet = { fcm_token: fcmToken };
+    }
+
+    const usuario = await Usuario.findOneAndUpdate(
+      { firebase_uid: req.user.uid },
+      updateQuery,
+      { returnDocument: 'after' }
+    );
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.json({ mensaje: 'Token FCM actualizado correctamente', fcmToken: usuario.fcmToken });
+  } catch (error) {
+    console.error('Error al actualizar token FCM:', error);
+    res.status(500).json({ error: 'Error interno del servidor al actualizar token FCM' });
   }
 });
 

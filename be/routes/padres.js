@@ -55,7 +55,8 @@ router.get('/mis-hijos', verifyToken, async (req, res) => {
     if (padre.tipo !== 'padre') return res.status(403).json({ error: 'Acceso exclusivo para padres' });
 
     const hijos = await Estudiante.find({ padre_id: padre._id })
-      .populate('conductor_id', 'nombre apellido correo');
+      .populate('conductor_id', 'nombre apellido correo')
+      .populate('ruta_id');
     res.json({ hijos });
   } catch (error) {
     res.status(500).json({ error: 'Error interno al obtener los hijos' });

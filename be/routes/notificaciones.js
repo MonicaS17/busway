@@ -160,6 +160,27 @@ router.post('/conductor/enviar', verifyToken, async (req, res) => {
       fecha: new Date(),
     });
 
+    // Enviar notificaciones push a cada padre destinatario
+    const { sendPushNotification } = require('../utils/notificaciones');
+    Usuario.find({ _id: { $in: padresIds } })
+      .then((destinatariosDocs) => {
+        destinatariosDocs.forEach((dest) => {
+          const token = dest.fcmToken || ((dest.fcm_token && dest.fcm_token.length > 0) ? dest.fcm_token[0] : null);
+          if (token) {
+            sendPushNotification({
+              token,
+              titulo: audiencia === 'emergencia' ? '⚠️ Alerta de Emergencia' : '🚌 Mensaje de BusWay',
+              mensaje: mensaje,
+              data: {
+                tipo: 'mensaje_conductor',
+                notificacionId: String(notificacion._id),
+              }
+            }).catch((err) => console.error('Error enviando push en /conductor/enviar:', err));
+          }
+        });
+      })
+      .catch((err) => console.error('Error al buscar destinatarios para push:', err));
+
     res.status(201).json({
       mensaje: 'Notificacion guardada correctamente',
       notificacion,
@@ -198,7 +219,13 @@ router.get('/padre', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Acceso exclusivo para padres' });
     }
 
-    const notificaciones = await Notificacion.find({ destinatarios: padre._id })
+    const { estudiante_id } = req.query;
+    const query = { destinatarios: padre._id };
+    if (estudiante_id) {
+      query.hijos_ids = estudiante_id;
+    }
+
+    const notificaciones = await Notificacion.find(query)
       .sort({ fecha: -1 })
       .limit(50)
       .populate('conductor_id', 'nombre apellido correo')
@@ -233,7 +260,7 @@ router.patch('/padre/:id/leida', verifyToken, async (req, res) => {
     const notificacion = await Notificacion.findOneAndUpdate(
       { _id: req.params.id, destinatarios: padre._id, 'lecturas.usuario_id': { $ne: padre._id } },
       { $push: { lecturas: { usuario_id: padre._id, fecha_lectura: new Date() } } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!notificacion) {
