@@ -2,42 +2,90 @@ const Viaje = require('../models/Viaje');
 const Estudiante = require('../models/Estudiante');
 
 // Obtener el viaje activo de un conductor
+// Filtra ÚNICAMENTE por estado: 'activo'. Si no existe → 404 limpio.
 exports.getViajeActivoConductor = async (req, res) => {
   try {
-    // Buscamos un viaje cuyo estado sea 'activo' o 'en_espera' para el conductor autenticado
-    const viajeActivo = await Viaje.findOne({ 
-      conductor_id: req.user.id, 
-      estado: { $in: ['activo', 'en_espera'] } 
+    const viajeActivo = await Viaje.findOne({
+      conductor_id: req.user.id,
+      estado: 'activo'          // filtro estricto
     });
-    
-    if (!viajeActivo) {
-      return res.status(404).json({ mensaje: 'No hay ninguna ruta en progreso actualmente.' });
+
+    if (viajeActivo) {
+      return res.json({ viaje: viajeActivo, fase: 'activo' });
     }
-    
-    res.json(viajeActivo);
+
+    // Si no hay viaje activo, verificar si ya se completó la ida hoy
+    const inicioDia = new Date();
+    inicioDia.setHours(0, 0, 0, 0);
+
+    const viajeIdaHoy = await Viaje.findOne({
+      conductor_id: req.user.id,
+      estado: 'finalizado',
+      tipo_viaje: 'ida',
+      createdAt: { $gte: inicioDia }
+    });
+
+    const viajeVueltaHoy = await Viaje.findOne({
+      conductor_id: req.user.id,
+      tipo_viaje: 'vuelta',
+      createdAt: { $gte: inicioDia }
+    });
+
+    if (viajeIdaHoy && !viajeVueltaHoy) {
+      return res.json({ viaje: null, fase: 'entre_viajes' });
+    }
+
+    return res.json({ viaje: null, fase: 'sin_viaje' });
   } catch (error) {
+    console.error('Error al obtener el viaje activo del conductor:', error);
     res.status(500).json({ error: 'Error al obtener el viaje activo.' });
   }
 };
 
-// Obtener el viaje activo para un padre (de sus estudiantes/hijos)
+// Obtener el viaje activo para un padre
+// Filtra con lógica estricta y fases según el día actual.
 exports.getViajeActivoPadre = async (req, res) => {
   try {
-    // Buscar estudiantes del padre usando el modelo estandarizado Estudiante
     const estudiantes = await Estudiante.find({ padre_id: req.user.id });
     if (!estudiantes || estudiantes.length === 0) {
-      return res.json([]);
+      return res.json({ viaje: null, fase: 'sin_viaje' });
     }
-    
-    const conductorIds = estudiantes.map(e => e.conductor_id).filter(id => id);
-    
-    // Buscar viajes activos o en espera de estos conductores
-    const viajesActivos = await Viaje.find({
+
+    const conductorIds = estudiantes.map(e => e.conductor_id).filter(Boolean);
+    const inicioDia = new Date();
+    inicioDia.setHours(0, 0, 0, 0);
+
+    // Existe viaje con estado 'activo' hoy
+    const viajeActivo = await Viaje.findOne({
       conductor_id: { $in: conductorIds },
-      estado: { $in: ['activo', 'en_espera'] }
+      estado: 'activo',
+      createdAt: { $gte: inicioDia }
     });
-    
-    res.json(viajesActivos);
+
+    if (viajeActivo) {
+      return res.json({ viaje: viajeActivo, fase: 'en_curso' });
+    }
+
+    // Existe viaje tipo 'ida' con estado 'finalizado' HOY
+    // Y NO existe viaje tipo 'vuelta' con estado 'activo' o 'finalizado' hoy
+    const viajeIdaHoy = await Viaje.findOne({
+      conductor_id: { $in: conductorIds },
+      estado: 'finalizado',
+      tipo_viaje: 'ida',
+      createdAt: { $gte: inicioDia }
+    });
+
+    const viajeVueltaHoy = await Viaje.findOne({
+      conductor_id: { $in: conductorIds },
+      tipo_viaje: 'vuelta',
+      createdAt: { $gte: inicioDia }
+    });
+
+    if (viajeIdaHoy && !viajeVueltaHoy) {
+      return res.json({ viaje: null, fase: 'entre_viajes' });
+    }
+
+    return res.json({ viaje: null, fase: 'sin_viaje' });
   } catch (error) {
     console.error('Error al obtener viaje activo para padre:', error);
     res.status(500).json({ error: 'Error al obtener el viaje activo.' });
@@ -47,9 +95,8 @@ exports.getViajeActivoPadre = async (req, res) => {
 // Obtener el historial completo de viajes
 exports.getHistorialViajes = async (req, res) => {
   try {
-    const query = req.user.tipo === 'conductor' 
-      ? { conductor_id: req.user.id } 
-      // Lógica adaptada según rol
+    const query = req.user.tipo === 'conductor'
+      ? { conductor_id: req.user.id }
       : { 'asistencias.hijo_id': { $in: req.user.hijos_ids || [] } };
 
     const historial = await Viaje.find(query).sort({ hora_salida: -1 });
