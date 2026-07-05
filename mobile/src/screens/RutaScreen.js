@@ -368,7 +368,7 @@ function RutaConductor({ navigation, usuario }) {
         {/* Botón iniciar ruta */}
         <TouchableOpacity
           style={styles.btnIniciar}
-          onPress={() => navigation.navigate('Viaje', { usuario })}
+          onPress={() => Alert.alert('BusWay GPS', 'Iniciando transmisión GPS en tiempo real. Los padres han sido notificados del inicio del recorrido.')}
         >
           <Ionicons name="play-circle" size={20} color="#0D1B3E" />
           <Text style={styles.btnIniciarText}>Iniciar Ruta en Tiempo Real</Text>
