@@ -10,6 +10,7 @@ const usuarioSchema = new mongoose.Schema({
   foto_perfil: { type: String, default: null },
   estado: { type: String, default: 'activo' },
   fcm_token: [{ type: String }],
+  fcmToken: { type: String, default: null },
   fecha_registro: { type: Date, default: Date.now },
   datos_conductor: { type: Object, default: null },
   datos_padre: { type: Object, default: null },

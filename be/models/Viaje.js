@@ -13,7 +13,7 @@ const ViajeSchema = new mongoose.Schema({
   },
   padre_id: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Usuario' // Hace referencia a la colección 'usuarios' (opcional)
+    ref: 'Usuario'
   },
   estudiantes_abordo: [{ 
     type: mongoose.Schema.Types.ObjectId, 
@@ -28,8 +28,8 @@ const ViajeSchema = new mongoose.Schema({
   },
   estado: { 
     type: String, 
-    enum: ['en_espera', 'activo', 'finalizado'], 
-    default: 'activo' 
+    enum: ['en_espera', 'en_curso', 'activo', 'finalizado'], 
+    default: 'en_espera' 
   },
   tipo_viaje: {
     type: String,
@@ -44,7 +44,7 @@ const ViajeSchema = new mongoose.Schema({
     },
     tipo: { 
       type: String, 
-      enum: ['subida', 'bajada'], 
+      enum: ['subida', 'bajada', 'pendiente', 'ausente', 'abordo', 'entregado'], 
       required: true 
     },
     metodo_registro: { 
@@ -71,7 +71,7 @@ const ViajeSchema = new mongoose.Schema({
 module.exports = mongoose.model('Viaje', ViajeSchema);
 const asistenciaSchema = new mongoose.Schema({
   hijo_id: { type: mongoose.Schema.Types.ObjectId, ref: 'estudiantes', required: true },
-  tipo: { type: String, enum: ['subida', 'bajada'], required: true },
+  tipo: { type: String, enum: ['subida', 'bajada', 'pendiente', 'ausente', 'abordo', 'entregado'], required: true },
   metodo_registro: { type: String, enum: ['qr', 'manual'], required: true },
   fecha_hora: { type: Date, required: true },
   latitud: Number,
@@ -84,7 +84,7 @@ const viajeSchema = new mongoose.Schema({
   estudiantes_abordo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'estudiantes' }],
   hora_salida: { type: Date, required: true },
   hora_llegada: { type: Date, default: null },
-  estado: { type: String, enum: ['en_curso', 'finalizado'], required: true },
+  estado: { type: String, enum: ['en_espera', 'en_curso', 'activo', 'finalizado'], required: true },
   tipo_viaje: { type: String, enum: ['ida', 'vuelta'], required: true },
   asistencias: { type: [asistenciaSchema], default: [] },
 }, { timestamps: true });
