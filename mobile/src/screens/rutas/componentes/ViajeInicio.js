@@ -7,7 +7,10 @@ export default function ViajeInicio({
   tipoViaje,
   estudiantes,
   iniciarRuta,
-  comenzarAsistencia
+  comenzarAsistencia,
+  rutas = [],
+  seleccionarRutaConductor,
+  faseViaje
 }) {
   const total = estudiantes.length;
   const abordo = estudiantes.filter(e => e.estado === 'abordo').length;
@@ -39,11 +42,15 @@ export default function ViajeInicio({
         </View>
         <Text style={styles.heroTitle}>¿Listo para iniciar?</Text>
         <Text style={styles.heroDesc}>
-          {tipoViaje === 'ida'
-            ? 'Inicia el recorrido para comenzar a recoger a los estudiantes desde sus hogares.'
-            : 'Pasa lista de asistencia antes de iniciar el recorrido de vuelta a casa.'}
+          {faseViaje === 'jornada_completa'
+            ? 'Ruta completada por hoy. Vuelve mañana.'
+            : (tipoViaje === 'ida'
+              ? 'Inicia el recorrido para comenzar a recoger a los estudiantes desde sus hogares.'
+              : 'Pasa lista de asistencia antes de iniciar el recorrido de vuelta a casa.')}
         </Text>
       </View>
+
+
 
       <View style={styles.miniStats}>
         <MiniStat valor={total}     label="Total"     color="#0D1B3E" />
@@ -52,10 +59,17 @@ export default function ViajeInicio({
         <MiniStat valor={ausente}   label="Ausente"   color="#DC2626" />
       </View>
 
-      <TouchableOpacity style={styles.btnPrimary} onPress={handleStart}>
-        <Ionicons name="qr-code-outline" size={20} color="#0D1B3E" />
-        <Text style={styles.btnPrimaryText}>Comenzar asistencia</Text>
-      </TouchableOpacity>
+      {faseViaje === 'jornada_completa' ? (
+        <View style={[styles.btnPrimary, { backgroundColor: '#C8D6E5' }]}>
+          <Ionicons name="lock-closed-outline" size={20} color="#888" />
+          <Text style={[styles.btnPrimaryText, { color: '#888' }]}>Ruta completada</Text>
+        </View>
+      ) : (
+        <TouchableOpacity style={styles.btnPrimary} onPress={handleStart}>
+          <Ionicons name="qr-code-outline" size={20} color="#0D1B3E" />
+          <Text style={styles.btnPrimaryText}>Comenzar asistencia</Text>
+        </TouchableOpacity>
+      )}
 
       <Text style={[styles.sectionLabel, { marginTop: 24 }]}>Ruta de hoy</Text>
       <View style={styles.infoCard}>
@@ -113,4 +127,28 @@ const styles = StyleSheet.create({
   filaInfoIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E3ECF7' },
   filaInfoLabel: { fontSize: 11, color: '#888', marginBottom: 1 },
   filaInfoValor: { fontSize: 13, fontWeight: '600', color: '#0D1B3E' },
+  routeSelectTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F5F8FC',
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    gap: 6,
+  },
+  routeSelectTabActive: {
+    backgroundColor: '#FFD700',
+    borderColor: '#FFD700',
+  },
+  routeSelectTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888',
+  },
+  routeSelectTabTextActive: {
+    color: '#0D1B3E',
+    fontWeight: '700',
+  },
 });

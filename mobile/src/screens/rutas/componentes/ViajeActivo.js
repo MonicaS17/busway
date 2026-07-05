@@ -36,10 +36,20 @@ function ViajeActivoPadre({
   conductorInfo,
   hijos,
   pulso,
-  bottomInset
+  bottomInset,
+  hijoSeleccionado
 }) {
-  const firstChild = hijos[0];
-  const estadoHijo = firstChild?.estado || 'pendiente';
+  const firstChild = hijos.find(h => String(h.id) === String(hijoSeleccionado?._id || hijoSeleccionado?.id));
+
+  if (!firstChild) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <Text style={{ color: '#888', textAlign: 'center' }}>Cargando información del estudiante...</Text>
+      </View>
+    );
+  }
+
+  const estadoHijo = firstChild.estado || 'pendiente';
 
   //Mapeo de estados visuales para la pantalla del padre
   let estadoVisual = 'esperando_ida';
@@ -62,7 +72,7 @@ function ViajeActivoPadre({
       if (estadoHijo === 'abordo') {
         estadoVisual = 'recogido_en_casa';
       } else {
-        estadoVisual = 'esperando_ida';
+        estadoVisual = 'en_camino_recogida';
       }
     }
   }
@@ -76,6 +86,15 @@ function ViajeActivoPadre({
       colorTexto: '#0D1B3E',
       colorIcono: '#888',
       activo: false
+    },
+    en_camino_recogida: {
+      icono: 'bus-outline',
+      titulo: 'El bus va en camino',
+      mensaje: 'El conductor ya inició la ruta y se dirige a recoger a tu hijo.',
+      colorFondo: '#3B82F6',
+      colorTexto: '#fff',
+      colorIcono: '#fff',
+      activo: true
     },
     recogido_en_casa: {
       icono: 'bus-outline',
@@ -139,8 +158,13 @@ function ViajeActivoPadre({
     return fallback;
   };
 
+  const hijosAMostrar = hijos.filter(
+    h => String(h.id) === String(hijoSeleccionado?._id || hijoSeleccionado?.id)
+  );
+
   return (
     <ScrollView contentContainerStyle={[styles.body, { paddingBottom: bottomInset + 24 }]} showsVerticalScrollIndicator={false}>
+      {/* Banner de estado */}
       <View style={[
         styles.estadoViajeBanner,
         { backgroundColor: configVisual.colorFondo }
@@ -161,35 +185,35 @@ function ViajeActivoPadre({
         <Ionicons name={configVisual.icono} size={22} color={configVisual.colorIcono} />
       </View>
 
+      {/* Ubicación del bus */}
       <Text style={styles.sectionLabel}>Ubicación del bus</Text>
-      <View style={styles.mapaContainer}>
-        {rutaActiva ? (
-          <>
-            <MapView ref={mapRef} style={styles.mapaSimulado} provider={PROVIDER_DEFAULT} initialRegion={coordenadasBus}>
-              <Marker coordinate={coordenadasBus} title="Autobús Escolar" zIndex={99}>
-                <View style={styles.customMarkerBus}><Text style={styles.markerEmoji}>🚌</Text></View>
-              </Marker>
-              <Marker coordinate={coordenadasHijo} title="Tu Hogar" zIndex={5}>
-                <View style={[styles.customMarkerHito, { backgroundColor: '#3B82F6' }]}><Text style={styles.markerEmojiSmall}>🏠</Text></View>
-              </Marker>
-              <Marker coordinate={{ latitude: 8.9975, longitude: -79.5240 }} title={rutaInfo?.escuela || 'Colegio San Agustín'} zIndex={5}>
-                <View style={[styles.customMarkerHito, { backgroundColor: '#10B981' }]}><Text style={styles.markerEmojiSmall}>🏫</Text></View>
-              </Marker>
-            </MapView>
-            <View style={styles.mapaFooter}>
-              <Ionicons name="information-circle-outline" size={14} color="#888" />
-              <Text style={styles.mapaFooterText}>Actualización GPS cada 5 segundos · Socket.io</Text>
-            </View>
-          </>
-        ) : (
-          <View style={styles.mapaInactivo}>
-            <Ionicons name="map-outline" size={40} color="#C8D6E5" />
-            <Text style={styles.mapaInactivoTitle}>Mapa no disponible</Text>
-            <Text style={styles.mapaInactivoDesc}>El mapa se activará cuando el conductor inicie el recorrido.</Text>
+      {faseViaje === 'en_curso' && rutaActiva ? (
+        <View style={styles.mapaContainer}>
+          <MapView ref={mapRef} style={styles.mapaSimulado} provider={PROVIDER_DEFAULT} initialRegion={coordenadasBus}>
+            <Marker coordinate={coordenadasBus} title="Autobús Escolar" zIndex={99}>
+              <View style={styles.customMarkerBus}><Text style={styles.markerEmoji}>🚌</Text></View>
+            </Marker>
+            <Marker coordinate={coordenadasHijo} title="Tu Hogar" zIndex={5}>
+              <View style={[styles.customMarkerHito, { backgroundColor: '#3B82F6' }]}><Text style={styles.markerEmojiSmall}>🏠</Text></View>
+            </Marker>
+            <Marker coordinate={{ latitude: 8.9975, longitude: -79.5240 }} title={rutaInfo?.escuela || 'Colegio San Agustín'} zIndex={5}>
+              <View style={[styles.customMarkerHito, { backgroundColor: '#10B981' }]}><Text style={styles.markerEmojiSmall}>🏫</Text></View>
+            </Marker>
+          </MapView>
+          <View style={styles.mapaFooter}>
+            <Ionicons name="information-circle-outline" size={14} color="#888" />
+            <Text style={styles.mapaFooterText}>Actualización GPS cada 5 segundos · Socket.io</Text>
           </View>
-        )}
-      </View>
+        </View>
+      ) : (
+        <View style={styles.mapaInactivo}>
+          <Ionicons name="map-outline" size={40} color="#C8D6E5" />
+          <Text style={styles.mapaInactivoTitle}>Mapa no disponible</Text>
+          <Text style={styles.mapaInactivoDesc}>El mapa se activará cuando el conductor inicie el recorrido.</Text>
+        </View>
+      )}
 
+      {/* Conductor */}
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Conductor</Text>
       <View style={styles.infoCard}>
         <View style={styles.conductorRow}>
@@ -209,9 +233,10 @@ function ViajeActivoPadre({
         <FilaInfoViaje icon="time-outline" label="Horario" valor={getSafeText(rutaInfo?.horario, '6:30 AM — 7:15 AM')} last />
       </View>
 
+      {/* Estado de tus hijos (siempre visible) */}
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Estado de tus hijos</Text>
       <View style={styles.infoCard}>
-        {hijos.map((hijo, i) => {
+        {hijosAMostrar.map((hijo, i) => {
           const cfg = {
             pendiente: { color: '#F59E0B', bg: '#FFF8E1', icon: 'time-outline', texto: 'Pendiente' },
             abordo:    { color: '#16A34A', bg: '#E6F9EE', icon: 'checkmark-circle-outline', texto: 'A bordo' },
@@ -220,7 +245,7 @@ function ViajeActivoPadre({
           }[hijo.estado] || { color: '#888', bg: '#F5F5F5', icon: 'help-circle-outline', texto: hijo.estado };
 
           return (
-            <View key={hijo.id} style={[styles.hijoEstadoRow, i < hijos.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}>
+            <View key={hijo.id} style={[styles.hijoEstadoRow, i < hijosAMostrar.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}>
               <View style={styles.hijoAvatar}><Text style={styles.hijoAvatarText}>{hijo.nombre.charAt(0).toUpperCase()}</Text></View>
               <Text style={styles.hijoNombre}>{hijo.nombre}</Text>
               <View style={[styles.estadoChip, { backgroundColor: cfg.bg }]}>

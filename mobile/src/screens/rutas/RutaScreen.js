@@ -10,11 +10,12 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { auth } from '../../config/firebase';
 import api from '../../config/api';
+import { getAuthHeader } from '../../utils/authToken';
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function RutaScreen({ navigation, route }) {
-  const { usuario } = route.params;
-  const esPadre = usuario.tipo === 'padre';
+  const { usuario } = route?.params || {};
+  const esPadre = usuario?.tipo === 'padre';
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -40,7 +41,7 @@ export default function RutaScreen({ navigation, route }) {
         {/* Card blanca */}
         <View style={styles.card}>
           {esPadre
-            ? <RutaPadre navigation={navigation} usuario={usuario} />
+            ? <RutaPadre navigation={navigation} usuario={usuario} route={route} />
             : <RutaConductor navigation={navigation} usuario={usuario} />
           }
         </View>
@@ -50,52 +51,106 @@ export default function RutaScreen({ navigation, route }) {
 }
 
 //  ── VISTA PADRE ──────────────────────────────────────────
-function RutaPadre({ navigation, usuario }) {
-  const [loading, setLoading] = useState(true);
+function RutaPadre({ navigation, usuario, route }) {
+  const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [ruta, setRuta] = useState(null);
+  
+  const [hijos, setHijos] = useState([]);
+  const [hijoSeleccionado, setHijoSeleccionado] = useState(null);
+  const [mostrarGrid, setMostrarGrid] = useState(false);
 
+  // Si viene hijoSeleccionado en route.params
   useEffect(() => {
-    const fetchPadreRuta = async () => {
+    if (route?.params?.hijoSeleccionado) {
+      setHijoSeleccionado(route.params.hijoSeleccionado);
+      setMostrarGrid(false);
+    }
+  }, [route?.params?.hijoSeleccionado]);
+
+  // 1. Cargar hijos y auto-seleccionar si hay 1 solo
+  useEffect(() => {
+    const cargarHijos = async () => {
       try {
-        setLoading(true);
+        setCargando(true);
         setError('');
-        
-        if (!auth.currentUser) {
-          setError('Por favor, inicia sesión para continuar.');
-          setLoading(false);
-          return;
-        }
 
-        const token = await auth.currentUser.getIdToken();
+        const headers = await getAuthHeader();
+        console.log('[RutaScreen] auth header:', headers.Authorization?.substring(0, 40));
 
-        // 1. Obtener hijos del padre
-        const resHijos = await api.get('/api/padre/mis-hijos', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const resHijos = await api.get('/api/padre/mis-hijos', { headers });
 
         if (!resHijos.data || !resHijos.data.hijos || resHijos.data.hijos.length === 0) {
           setError('No tienes hijos registrados actualmente.');
-          setLoading(false);
+          setCargando(false);
           return;
         }
 
-        const firstChild = resHijos.data.hijos[0];
-        const condId = firstChild.conductor_id;
-        
-        if (!condId) {
-          setRuta(null);
-          setLoading(false);
-          return;
-        }
+        const lista = resHijos.data.hijos;
+        setHijos(lista);
 
-        // 2. Obtener el perfil y vehículo del conductor
+        const uniqueRutas = Array.from(new Set(
+          lista.map(h => h.ruta_id?._id?.toString() || h.ruta_id?.toString()).filter(Boolean)
+        ));
+
+        if (lista.length === 1 || uniqueRutas.length <= 1) {
+          setHijoSeleccionado(lista[0]);
+          setMostrarGrid(false);
+        } else if (lista.length > 1) {
+          setMostrarGrid(true);
+          setCargando(false);
+        }
+      } catch (err) {
+        console.error('Error cargando hijos en mount:', err);
+        setError('Error al conectar con el servidor.');
+        setCargando(false);
+      }
+    };
+
+    cargarHijos();
+  }, [usuario]);
+
+  // 2. Cargar datos del conductor y ruta del hijo seleccionado
+  useEffect(() => {
+    if (!hijoSeleccionado?._id) return;
+
+    const cargarDatosConductorYRuta = async (hijo) => {
+      // Guard: no continuar si faltan IDs críticos
+      if (!hijo?._id || !hijo?.conductor_id || !hijo?.ruta_id) {
+        console.warn('[RutaScreen] Hijo incompleto, abortando carga:', hijo);
+        setRuta({
+          sinConductor: !hijo?.conductor_id,
+          sinRuta: !hijo?.ruta_id,
+          hijoNombre: hijo?.nombre || 'estudiante'
+        });
+        setCargando(false);
+        return;
+      }
+
+      const condId = (hijo.conductor_id?._id || hijo.conductor_id)?.toString();
+      const rutaId = (hijo.ruta_id?._id || hijo.ruta_id)?.toString();
+
+      if (!condId || condId === 'undefined' || condId === 'null') {
+        console.warn('[RutaScreen] conductor_id inválido:', condId);
+        setRuta({
+          sinConductor: true,
+          hijoNombre: hijo.nombre
+        });
+        setCargando(false);
+        return;
+      }
+
+      try {
+        setCargando(true);
+        setError('');
+        const headers = await getAuthHeader();
+        console.log('[RutaScreen] auth header:', headers.Authorization?.substring(0, 40));
+
+        // Obtener el perfil y vehículo del conductor
         let condInfo = null;
         let vehiculoInfo = null;
         try {
-          const resPerfil = await api.get(`/api/conductor/${condId}/perfil`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          const resPerfil = await api.get(`/api/conductor/${condId}/perfil`, { headers });
           if (resPerfil.data) {
             condInfo = resPerfil.data.conductor;
             vehiculoInfo = resPerfil.data.vehiculo;
@@ -104,12 +159,10 @@ function RutaPadre({ navigation, usuario }) {
           console.log('Error al buscar perfil del conductor:', err.message);
         }
 
-        // 3. Obtener la ruta del conductor
+        // Obtener la ruta del conductor
         let rutaInfo = null;
         try {
-          const resRuta = await api.get(`/api/conductor/${condId}/ruta`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          const resRuta = await api.get(`/api/conductor/${condId}/ruta?ruta_id=${rutaId}`, { headers });
           if (resRuta.data && resRuta.data.ruta) {
             rutaInfo = resRuta.data.ruta;
           }
@@ -118,22 +171,18 @@ function RutaPadre({ navigation, usuario }) {
         }
 
         if (!rutaInfo) {
-          setError('El conductor asignado no tiene una ruta configurada.');
-          setLoading(false);
+          setRuta({
+            sinRuta: true,
+            hijoNombre: hijo.nombre
+          });
+          setCargando(false);
           return;
         }
-
-        // Mapear hijos en esta ruta
-        const hijosList = resHijos.data.hijos.map(h => ({
-          id: h._id,
-          nombre: h.nombre,
-          estado: h.estado || 'Activo'
-        }));
 
         const destinoEscuela = rutaInfo.escuela_id ? (typeof rutaInfo.escuela_id === 'object' ? (rutaInfo.escuela_id.nombre || rutaInfo.escuela) : rutaInfo.escuela) : (rutaInfo.escuela || 'Escuela asignada');
         // Mapear paradas de forma dinámica basada en el origen y destino
         const paradasList = [
-          { orden: 1, descripcion: `Punto de recogida — Hogar de ${firstChild.nombre}`, hora: rutaInfo.horario?.split('—')[0]?.trim() || '6:30 AM' },
+          { orden: 1, descripcion: `Punto de recogida — Hogar de ${hijo.nombre}`, hora: rutaInfo.horario?.split('—')[0]?.trim() || '6:30 AM' },
           { orden: 2, descripcion: `Destino — ${destinoEscuela}`, hora: rutaInfo.horario?.split('—')[1]?.trim() || '7:15 AM' }
         ];
 
@@ -156,27 +205,21 @@ function RutaPadre({ navigation, usuario }) {
           mesActual: 3, // Simulado por defecto
           totalMeses: 10,
           paradas: paradasList,
-          hijos: hijosList,
         });
 
       } catch (error) {
-        console.error('Error cargando ruta padre:', error);
+        console.error('Error cargando ruta padre:', error.response?.status, error.response?.data || error.message || error);
         setError('Error al conectar con el servidor.');
       } finally {
-        setLoading(false);
+        setCargando(false);
       }
     };
 
-    fetchPadreRuta();
-  }, [usuario]);
+    cargarDatosConductorYRuta(hijoSeleccionado);
+  }, [hijoSeleccionado?._id]);
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
-        <ActivityIndicator size="large" color="#0D1B3E" />
-        <Text style={{ marginTop: 10, color: '#888' }}>Cargando detalles de tu ruta...</Text>
-      </View>
-    );
+  if (cargando) {
+    return <ActivityIndicator size="large" color="#0D1B3E" style={{ marginTop: 40 }} />;
   }
 
   if (error) {
@@ -191,6 +234,52 @@ function RutaPadre({ navigation, usuario }) {
     );
   }
 
+  if (mostrarGrid) {
+    return (
+      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <View style={styles.hijosMenuContainer}>
+          <Text style={styles.menuTitle}>Selecciona un estudiante</Text>
+          {hijos.map((hijo) => {
+            const schoolName = hijo.ruta_id?.escuela || hijo.ruta_id?.nombre_ruta || 'Escuela asignada';
+            const activo = hijo.estado === 'Activo';
+            return (
+              <TouchableOpacity
+                key={hijo._id}
+                style={styles.hijoMenuItem}
+                onPress={() => {
+                  setHijoSeleccionado(hijo);
+                  setMostrarGrid(false);
+                  navigation.navigate('Ruta', { usuario, hijoSeleccionado: hijo });
+                }}
+              >
+                <View style={{ flex: 1, gap: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Ionicons name="person-circle-outline" size={32} color="#0D1B3E" />
+                    <Text style={styles.hijoMenuName}>{hijo.nombre}</Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#666', marginLeft: 42 }}>{schoolName}</Text>
+                </View>
+                <View style={[
+                  styles.estadoBadge,
+                  activo ? styles.estadoBadgeActivo : { backgroundColor: '#FEE2E2' }
+                ]}>
+                  <Text style={[
+                    styles.estadoBadgeText,
+                    activo ? { color: '#16A34A' } : { color: '#DC2626' }
+                  ]}>
+                    {hijo.estado || 'Activo'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
+    );
+  }
+
+  if (!hijoSeleccionado) return null;
+
   if (!ruta) {
     return (
       <EstadoVacio
@@ -203,124 +292,158 @@ function RutaPadre({ navigation, usuario }) {
     );
   }
 
-  const progreso = (ruta.mesActual / ruta.totalMeses) * 100;
+  const progreso = ruta && !ruta?.sinConductor && !ruta?.sinRuta ? ((ruta?.mesActual || 0) / (ruta?.totalMeses || 10)) * 100 : 0;
+
+  const uniqueRutas = Array.from(new Set(
+    hijos.map(h => h.ruta_id?._id?.toString() || h.ruta_id?.toString()).filter(Boolean)
+  ));
 
   return (
     <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-      {/* Tarjeta del conductor */}
-      <Text style={styles.sectionLabel}>Conductor asignado</Text>
-      <View style={styles.conductorCard}>
-        <View style={styles.conductorCardTop}>
-          <View style={styles.avatarGrande}>
-            <Text style={styles.avatarGrandeText}>{ruta.conductor.nombre.charAt(0)}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={styles.rowGap}>
-              <Text style={styles.conductorNombre}>{ruta.conductor.nombre}</Text>
-              {ruta.conductor.verificado && (
-                <View style={styles.verificadoBadge}>
-                  <Ionicons name="shield-checkmark" size={11} color="#0D1B3E" />
-                  <Text style={styles.verificadoText}>Verificado</Text>
+      {hijos.length > 1 && uniqueRutas.length > 1 && (
+        <TouchableOpacity
+          onPress={() => setMostrarGrid(true)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F4FA', marginBottom: 16 }}
+        >
+          <Ionicons name="arrow-back-outline" size={18} color="#0D1B3E" />
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#0D1B3E' }}>Cambiar estudiante</Text>
+        </TouchableOpacity>
+      )}
+
+      {ruta?.sinConductor ? (
+        <EstadoVacio
+          icon="person-add-outline"
+          titulo="Sin conductor asignado"
+          desc={`Tu hijo ${ruta?.hijoNombre || 'estudiante'} no tiene un conductor asignado actualmente.`}
+          btnTexto="Ir al Marketplace"
+          onPress={() => navigation.navigate('Marketplace', { usuario })}
+        />
+      ) : ruta?.sinRuta ? (
+        <EstadoVacio
+          icon="map-outline"
+          titulo="Sin ruta activa"
+          desc={`El conductor asignado a ${ruta?.hijoNombre || 'tu hijo'} no tiene una ruta configurada.`}
+          btnTexto="Ir al Marketplace"
+          onPress={() => navigation.navigate('Marketplace', { usuario })}
+        />
+      ) : (
+        <>
+          {/* Tarjeta del conductor */}
+          <Text style={styles.sectionLabel}>Conductor asignado</Text>
+          <View style={styles.conductorCard}>
+            <View style={styles.conductorCardTop}>
+              <View style={styles.avatarGrande}>
+                <Text style={styles.avatarGrandeText}>{ruta?.conductor?.nombre ? ruta.conductor.nombre.charAt(0) : 'C'}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.rowGap}>
+                  <Text style={styles.conductorNombre}>{ruta?.conductor?.nombre || 'Conductor'}</Text>
+                  {ruta?.conductor?.verificado && (
+                    <View style={styles.verificadoBadge}>
+                      <Ionicons name="shield-checkmark" size={11} color="#0D1B3E" />
+                      <Text style={styles.verificadoText}>Verificado</Text>
+                    </View>
+                  )}
                 </View>
-              )}
-            </View>
-            <View style={styles.starsRow}>
-              {[1, 2, 3, 4, 5].map(s => (
-                <Ionicons key={s} name={s <= Math.round(ruta.conductor.rating) ? 'star' : 'star-outline'} size={12} color="#FFD700" />
-              ))}
-              <Text style={styles.ratingTexto}>{ruta.conductor.rating} ({ruta.conductor.reviews} reseñas)</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={styles.btnWhatsapp}
-            onPress={() => Alert.alert('WhatsApp', `Contactar a ${ruta.conductor.nombre}`)}
-          >
-            <Ionicons name="logo-whatsapp" size={18} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.divider} />
-
-        <FilaInfo icon="bus-outline" label="Vehículo" valor={ruta.conductor.vehiculo} />
-        <FilaInfo icon="card-outline" label="Placa" valor={ruta.conductor.placa} />
-        <FilaInfo icon="call-outline" label="Teléfono" valor={ruta.conductor.telefono} last />
-      </View>
-
-      {/* Info de la ruta */}
-      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Detalles de la ruta</Text>
-      <View style={styles.infoCard}>
-        <FilaInfo icon="school-outline" label="Escuela" valor={ruta.escuela} />
-        <FilaInfo icon="location-outline" label="Zona de recogida" valor={ruta.zona} />
-        <FilaInfo icon="time-outline" label="Horario" valor={ruta.horario} />
-        <FilaInfo icon="calendar-outline" label="Frecuencia" valor={ruta.frecuencia} />
-        <FilaInfo icon="card-outline" label="Tarifa mensual" valor={`$${ruta.tarifa}/mes`} last />
-      </View>
-
-      {/* Hijos en esta ruta */}
-      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-        {ruta.hijos.length === 1 ? 'Hijo en esta ruta' : 'Hijos en esta ruta'}
-      </Text>
-      <View style={styles.infoCard}>
-        {ruta.hijos.map((hijo, i) => (
-          <View
-            key={hijo.id}
-            style={[styles.hijoRow, i < ruta.hijos.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}
-          >
-            <View style={styles.hijoAvatar}>
-              <Text style={styles.hijoAvatarText}>{hijo.nombre.charAt(0)}</Text>
-            </View>
-            <Text style={styles.hijoNombre}>{hijo.nombre}</Text>
-            <View style={styles.estadoActivoBadge}>
-              <View style={styles.estadoPunto} />
-              <Text style={styles.estadoActivoText}>{hijo.estado}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      {/* Paradas */}
-      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Recorrido</Text>
-      <View style={styles.paradasCard}>
-        {ruta.paradas.map((parada, i) => {
-          const esUltima = i === ruta.paradas.length - 1;
-          const esPrimera = i === 0;
-          return (
-            <View key={i} style={styles.paradaRow}>
-              {/* Línea de tiempo */}
-              <View style={styles.paradaTimeline}>
-                <View style={[
-                  styles.paradaPunto,
-                  esPrimera && styles.paradaPuntoPrimero,
-                  esUltima && styles.paradaPuntoUltimo,
-                ]} />
-                {!esUltima && <View style={styles.paradaLinea} />}
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map(s => (
+                    <Ionicons key={s} name={s <= Math.round(ruta?.conductor?.rating || 0) ? 'star' : 'star-outline'} size={12} color="#FFD700" />
+                  ))}
+                  <Text style={styles.ratingTexto}>{ruta?.conductor?.rating || 0} ({ruta?.conductor?.reviews || 0} reseñas)</Text>
+                </View>
               </View>
-              {/* Contenido */}
-              <View style={styles.paradaContenido}>
-                <Text style={[styles.paradaDesc, (esPrimera || esUltima) && { fontWeight: '700', color: '#0D1B3E' }]}>
-                  {parada.descripcion}
-                </Text>
-                <Text style={styles.paradaHora}>{parada.hora}</Text>
-              </View>
+              <TouchableOpacity
+                style={styles.btnWhatsapp}
+                onPress={() => Alert.alert('WhatsApp', `Contactar a ${ruta?.conductor?.nombre || 'conductor'}`)}
+              >
+                <Ionicons name="logo-whatsapp" size={18} color="#fff" />
+              </TouchableOpacity>
             </View>
-          );
-        })}
-      </View>
 
-      {/* Progreso del contrato */}
-      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Contrato activo</Text>
-      <View style={styles.contratoCard}>
-        <View style={styles.contratoHeader}>
-          <Text style={styles.contratoMes}>Mes {ruta.mesActual} de {ruta.totalMeses}</Text>
-          <Text style={styles.contratoPct}>{Math.round(progreso)}%</Text>
-        </View>
-        <View style={styles.barraBase}>
-          <View style={[styles.barraRelleno, { width: `${progreso}%` }]} />
-        </View>
-        <Text style={styles.contratoNote}>
-          Quedan {ruta.totalMeses - ruta.mesActual} meses para completar el contrato.
-        </Text>
-      </View>
+            <View style={styles.divider} />
+
+            <FilaInfo icon="bus-outline" label="Vehículo" valor={ruta?.conductor?.vehiculo} />
+            <FilaInfo icon="card-outline" label="Placa" valor={ruta?.conductor?.placa} />
+            <FilaInfo icon="call-outline" label="Teléfono" valor={ruta?.conductor?.telefono} last />
+          </View>
+
+          {/* Info de la ruta */}
+          <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Detalles de la ruta</Text>
+          <View style={styles.infoCard}>
+            <FilaInfo icon="school-outline" label="Escuela" valor={ruta?.escuela} />
+            <FilaInfo icon="location-outline" label="Zona de recogida" valor={ruta?.zona} />
+            <FilaInfo icon="time-outline" label="Horario" valor={ruta?.horario} />
+            <FilaInfo icon="calendar-outline" label="Frecuencia" valor={ruta?.frecuencia} />
+            <FilaInfo icon="card-outline" label="Tarifa mensual" valor={`$${ruta?.tarifa || 0}/mes`} last />
+          </View>
+
+          {/* Hijos en esta ruta */}
+          <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+            {hijos.filter(h => (h.ruta_id?._id || h.ruta_id) === (hijoSeleccionado?.ruta_id?._id || hijoSeleccionado?.ruta_id)).length === 1 ? 'Hijo en esta ruta' : 'Hijos en esta ruta'}
+          </Text>
+          <View style={styles.infoCard}>
+            {hijos.filter(h => (h.ruta_id?._id || h.ruta_id) === (hijoSeleccionado?.ruta_id?._id || hijoSeleccionado?.ruta_id)).map((hijo, i, filteredList) => (
+              <View
+                key={hijo._id}
+                style={[styles.hijoRow, i < filteredList.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}
+              >
+                <View style={styles.hijoAvatar}>
+                  <Text style={styles.hijoAvatarText}>{hijo.nombre ? hijo.nombre.charAt(0) : ''}</Text>
+                </View>
+                <Text style={styles.hijoNombre}>{hijo.nombre}</Text>
+                <View style={styles.estadoActivoBadge}>
+                  <View style={styles.estadoPunto} />
+                  <Text style={styles.estadoActivoText}>{hijo.estado || 'Activo'}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Paradas */}
+          <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Recorrido</Text>
+          <View style={styles.paradasCard}>
+            {ruta?.paradas?.map((parada, i) => {
+              const esUltima = i === (ruta?.paradas?.length || 0) - 1;
+              const esPrimera = i === 0;
+              return (
+                <View key={i} style={styles.paradaRow}>
+                  {/* Línea de tiempo */}
+                  <View style={styles.paradaTimeline}>
+                    <View style={[
+                      styles.paradaPunto,
+                      esPrimera && styles.paradaPuntoPrimero,
+                      esUltima && styles.paradaPuntoUltimo,
+                    ]} />
+                    {!esUltima && <View style={styles.paradaLinea} />}
+                  </View>
+                  {/* Contenido */}
+                  <View style={styles.paradaContenido}>
+                    <Text style={[styles.paradaDesc, (esPrimera || esUltima) && { fontWeight: '700', color: '#0D1B3E' }]}>
+                      {parada.descripcion}
+                    </Text>
+                    <Text style={styles.paradaHora}>{parada.hora}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Progreso del contrato */}
+          <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Contrato activo</Text>
+          <View style={styles.contratoCard}>
+            <View style={styles.contratoHeader}>
+              <Text style={styles.contratoMes}>Mes {ruta?.mesActual || 0} de {ruta?.totalMeses || 10}</Text>
+              <Text style={styles.contratoPct}>{Math.round(progreso)}%</Text>
+            </View>
+            <View style={styles.barraBase}>
+              <View style={[styles.barraRelleno, { width: `${progreso}%` }]} />
+            </View>
+            <Text style={styles.contratoNote}>
+              Quedan {(ruta?.totalMeses || 10) - (ruta?.mesActual || 0)} meses para completar el contrato.
+            </Text>
+          </View>
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -506,23 +629,21 @@ function RutaConductor({ navigation, usuario }) {
       setLoading(true);
       setError('');
 
-      if (!auth.currentUser) {
+      let headers;
+      try {
+        headers = await getAuthHeader();
+        console.log('[RutaConductor] auth header:', headers.Authorization?.substring(0, 40));
+      } catch (e) {
         setError('Por favor, inicia sesión para continuar.');
         setLoading(false);
         return;
       }
 
-      const token = await auth.currentUser.getIdToken();
-
       // Obtener la ruta del conductor
-      const resRuta = await api.get('/api/conductor/ruta', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const resRuta = await api.get('/api/conductor/ruta', { headers });
 
       // Obtener estudiantes asignados
-      const resEst = await api.get('/api/conductor/estudiantes', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const resEst = await api.get('/api/conductor/estudiantes', { headers });
 
       const estudiantesObtenidos = resEst.data?.estudiantes || [];
       const mappedEstudiantes = estudiantesObtenidos.map((e, idx) => ({
@@ -530,7 +651,7 @@ function RutaConductor({ navigation, usuario }) {
         nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
         zona: e.zona || 'Arraiján',
         escuela: e.escuela || (resRuta.data?.ruta?.escuela_id ? (typeof resRuta.data.ruta.escuela_id === 'object' ? resRuta.data.ruta.escuela_id.nombre : resRuta.data.ruta.escuela) : (resRuta.data?.ruta?.escuela || 'Colegio San Agustín')),
-        ruta_id: e.ruta_id || null,
+        ruta_id: e.ruta_id ? (typeof e.ruta_id === 'object' ? e.ruta_id._id : e.ruta_id) : null,
         inputPos: (idx + 1).toString(),
       }));
 
@@ -540,6 +661,7 @@ function RutaConductor({ navigation, usuario }) {
         const rutasBackend = resRuta.data.rutas || (resRuta.data.ruta ? [resRuta.data.ruta] : []);
         const mappedRutas = rutasBackend.map(r => ({
           id: r._id,
+          escuela_id: r.escuela_id,
           nombre_ruta: r.nombre_ruta || r.nombre || 'Ruta sin nombre',
           escuela_nombre: r.escuela_id ? (typeof r.escuela_id === 'object' ? r.escuela_id.nombre : r.escuela) : (r.escuela || 'Escuela asignada'),
           zona: r.zona || 'Arraiján',
@@ -633,8 +755,9 @@ function RutaConductor({ navigation, usuario }) {
     try {
       setGuardando(true);
       setErrorGuardar('');
-      const token = await auth.currentUser.getIdToken();
-      
+      const headers = await getAuthHeader();
+      console.log('[RutaConductor] auth header (crear ruta):', headers.Authorization?.substring(0, 40));
+
       const res = await api.post('/api/conductor/ruta', {
         escuela_id: formEscuelaId,
         nombre_ruta: formNombreRuta.trim(),
@@ -642,9 +765,7 @@ function RutaConductor({ navigation, usuario }) {
         horario_salida: formatTime12h(formSalidaDate),
         horario_llegada: formatTime12h(formLlegadaDate),
         frecuencia: formFrecuencia
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      }, { headers });
       
       if (res.data && res.data.ruta) {
         await fetchConductorRutaYEstudiantes();
@@ -948,7 +1069,7 @@ function RutaConductor({ navigation, usuario }) {
 
   // ── Detalle de ruta seleccionada ──────────────────────────────────────────
   if (rutaSeleccionada) {
-    const estudiantesDeRuta = estudiantes.filter(e => e.ruta_id === rutaSeleccionada.id);
+    const estudiantesDeRuta = estudiantes.filter(e => (e.ruta_id?._id || e.ruta_id) === rutaSeleccionada.id);
 
     return (
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -1067,7 +1188,11 @@ function RutaConductor({ navigation, usuario }) {
         {/* Botón iniciar ruta */}
         <TouchableOpacity
           style={styles.btnIniciar}
-          onPress={() => navigation.navigate('Viaje', { usuario })}
+          onPress={() => navigation.navigate('Viaje', {
+            usuario,
+            ruta_id: rutaSeleccionada.id || rutaSeleccionada._id,
+            rutaNombre: rutaSeleccionada.nombre_ruta
+          })}
         >
           <Ionicons name="play-circle" size={20} color="#0D1B3E" />
           <Text style={styles.btnIniciarText}>Iniciar Ruta en Tiempo Real</Text>
@@ -1085,7 +1210,7 @@ function RutaConductor({ navigation, usuario }) {
       <View style={styles.statsRow}>
         <StatCard icon="map-outline" valor={rutas.length} label="Rutas activas" color="#0D1B3E" />
         <StatCard icon="people-outline" valor={estudiantes.length} label="Estudiantes" color="#00AEEF" />
-        <StatCard icon="school-outline" valor={[...new Set(estudiantes.map(e => e.escuela))].length} label="Escuelas" color="#FFD700" textColor="#0D1B3E" />
+        <StatCard icon="school-outline" valor={new Set(rutas.map(r => r.escuela_id?._id?.toString() || r.escuela_id?.toString()).filter(Boolean)).size} label="Escuelas" color="#FFD700" textColor="#0D1B3E" />
       </View>
 
       {/* Lista de rutas */}
@@ -1327,6 +1452,10 @@ const styles = StyleSheet.create({
   // Botón volver
   btnVolver: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 20, alignSelf: 'flex-start' },
   btnVolverText: { fontSize: 14, fontWeight: '600', color: '#0D1B3E' },
+  hijosMenuContainer: { padding: 20, alignItems: 'center', width: '100%', minHeight: 300, gap: 10 },
+  menuTitle: { fontSize: 18, fontWeight: 'bold', color: '#0D1B3E', marginBottom: 20, textAlign: 'center' },
+  hijoMenuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F5F8FC', borderWidth: 1.5, borderColor: '#E3ECF7', borderRadius: 16, padding: 16, width: '100%', marginBottom: 12 },
+  hijoMenuName: { fontSize: 16, fontWeight: 'bold', color: '#0D1B3E' },
 
   // Estado vacío
   emptyContainer: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: '5%' },
@@ -1347,6 +1476,39 @@ const styles = StyleSheet.create({
   inputHelp: { fontSize: 11, color: '#888', marginTop: 4 },
   errorContainer: { backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FCA5A5', borderRadius: 12, padding: 12, marginBottom: 16 },
   errorText: { color: '#B91C1C', fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  hijosTabsContainer: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4FA',
+    backgroundColor: '#fff',
+    marginBottom: 16,
+  },
+  hijoTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: '#F5F8FC',
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    gap: 4,
+  },
+  hijoTabActive: {
+    backgroundColor: '#FFD700',
+    borderColor: '#FFD700',
+  },
+  hijoTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888',
+  },
+  hijoTabTextActive: {
+    color: '#0D1B3E',
+    fontWeight: '700',
+  },
   
   // Estilos del selector de escuelas
   modalOverlay: {
