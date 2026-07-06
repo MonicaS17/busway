@@ -15,7 +15,7 @@ const viajeSchema = new mongoose.Schema({
   estudiantes_abordo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'estudiantes' }],
   hora_salida: { type: Date, required: true },
   hora_llegada: { type: Date, default: null },
-  estado: { type: String, enum: ['en_curso', 'finalizado'], required: true },
+  estado: { type: String, enum: ['activo', 'en_curso', 'finalizado', 'en_espera'], required: true },
   tipo_viaje: { type: String, enum: ['ida', 'vuelta'], required: true },
   asistencias: { type: [asistenciaSchema], default: [] },
 }, { timestamps: true });
