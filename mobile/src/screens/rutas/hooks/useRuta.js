@@ -46,7 +46,9 @@ export default function useRuta({ usuario, esPadre }) {
           setHijos(hijosObtenidos);
 
           const firstChild = hijosObtenidos[0];
-          const condId = firstChild.conductor_id;
+          const condId = firstChild.conductor_id && typeof firstChild.conductor_id === 'object'
+            ? firstChild.conductor_id._id
+            : firstChild.conductor_id;
 
           if (!condId) {
             setError('Este estudiante no tiene un conductor asignado actualmente.');

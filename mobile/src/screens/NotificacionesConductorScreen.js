@@ -50,7 +50,8 @@ function formatearFecha(fecha) {
   });
 }
 
-export default function NotificacionesConductorScreen({ navigation }) {
+export default function NotificacionesConductorScreen({ navigation, route }) {
+  const { usuario } = route.params;
   const formularioRef = useRef(null);
   const [mensaje, setMensaje] = useState('');
   const [seleccionado, setSeleccionado] = useState(null);
@@ -63,6 +64,10 @@ export default function NotificacionesConductorScreen({ navigation }) {
   const [asistentes, setAsistentes] = useState([]);
   const [estudianteSeleccionado, setEstudianteSeleccionado] = useState(null);
   const [cargandoAsistentes, setCargandoAsistentes] = useState(false);
+
+  const [recibidas, setRecibidas] = useState([]);
+  const [sinLeerRecibidas, setSinLeerRecibidas] = useState(0);
+  const [expandidaRecibida, setExpandidaRecibida] = useState(null);
 
   const cargarHistorial = useCallback(async (mostrarCarga = false) => {
     if (mostrarCarga) setCargando(true);
@@ -80,9 +85,73 @@ export default function NotificacionesConductorScreen({ navigation }) {
     }
   }, []);
 
+  const cargarRecibidas = useCallback(async (mostrarCarga = false) => {
+    if (mostrarCarga) setCargando(true);
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.get('/api/notificaciones/conductor/recibidas', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setRecibidas(response.data.notificaciones || []);
+      setSinLeerRecibidas(response.data.sinLeer || 0);
+    } catch (error) {
+      console.log('Error al cargar notificaciones recibidas:', error.response?.data || error.message);
+    } finally {
+      setCargando(false);
+      setRefrescando(false);
+    }
+  }, []);
+
+  const marcarRecibidaLeida = async (id) => {
+    setRecibidas((prev) =>
+      prev.map((n) => (n._id === id ? { ...n, leida: true } : n))
+    );
+    try {
+      const token = await auth.currentUser.getIdToken();
+      await api.patch(`/api/notificaciones/conductor/${id}/leida`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSinLeerRecibidas((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      setRecibidas((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, leida: false } : n))
+      );
+      console.log('No se pudo marcar el aviso:', error.response?.data || error.message);
+    }
+  };
+
+  const handleToggleRecibida = (id) => {
+    if (expandidaRecibida === id) {
+      setExpandidaRecibida(null);
+      return;
+    }
+    setExpandidaRecibida(id);
+    marcarRecibidaLeida(id);
+  };
+
+  const marcarTodasRecibidasLeidas = async () => {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      await api.patch('/api/notificaciones/conductor/marcar-leidas/todas', {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setRecibidas((prev) => prev.map((n) => ({ ...n, leida: true })));
+      setSinLeerRecibidas(0);
+    } catch (error) {
+      console.log('Error marking all received notifications as read:', error.response?.data || error.message);
+    }
+  };
+
   useEffect(() => {
     cargarHistorial(true);
-  }, [cargarHistorial]);
+    cargarRecibidas(true);
+  }, [cargarHistorial, cargarRecibidas]);
+
+  useEffect(() => {
+    if (tab === 'recibidos' && sinLeerRecibidas > 0) {
+      marcarTodasRecibidasLeidas();
+    }
+  }, [tab, sinLeerRecibidas]);
 
   const cargarAsistentes = useCallback(async () => {
     setCargandoAsistentes(true);
@@ -187,6 +256,7 @@ export default function NotificacionesConductorScreen({ navigation }) {
   const refrescar = () => {
     setRefrescando(true);
     cargarHistorial();
+    cargarRecibidas();
   };
 
   return (
@@ -209,6 +279,7 @@ export default function NotificacionesConductorScreen({ navigation }) {
           {[
             { key: 'enviar', label: 'Enviar aviso' },
             { key: 'historial', label: 'Historial' },
+            { key: 'recibidos', label: 'Avisos recibidos' },
           ].map((t) => (
             <TouchableOpacity
               key={t.key}
@@ -216,7 +287,9 @@ export default function NotificacionesConductorScreen({ navigation }) {
               onPress={() => setTab(t.key)}
               activeOpacity={0.8}
             >
-              <Text style={[s.tabLabel, tab === t.key && s.tabLabelActive]}>{t.label}</Text>
+              <Text style={[s.tabLabel, tab === t.key && s.tabLabelActive]}>
+                {t.label} {t.key === 'recibidos' && sinLeerRecibidas > 0 ? `(${sinLeerRecibidas})` : ''}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -429,6 +502,74 @@ export default function NotificacionesConductorScreen({ navigation }) {
             ))}
           </ScrollView>
         )}
+
+        {tab === 'recibidos' && (
+          <ScrollView
+            contentContainerStyle={s.body}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refrescando} onRefresh={refrescar} />}
+          >
+            {cargando ? (
+              <View style={s.loadingBox}>
+                <ActivityIndicator color="#00AEEF" />
+                <Text style={s.loadingText}>Cargando avisos...</Text>
+              </View>
+            ) : recibidas.length === 0 ? (
+              <View style={s.emptyBox}>
+                <Ionicons name="notifications-off-outline" size={44} color="#C8D6E5" />
+                <Text style={s.emptyText}>No tienes avisos aún</Text>
+                <Text style={s.emptySub}>Las solicitudes de los padres aparecerán aquí</Text>
+              </View>
+            ) : (
+              recibidas.map((n) => {
+                const abierta = expandidaRecibida === n._id;
+                return (
+                  <TouchableOpacity
+                    key={n._id}
+                    style={[s.notifCard, !n.leida && s.notifCardUnread]}
+                    onPress={() => handleToggleRecibida(n._id)}
+                    activeOpacity={0.85}
+                  >
+                    {!n.leida && <View style={s.unreadDot} />}
+                    <View style={[s.notifIcon, !n.leida && s.notifIconUnread]}>
+                      <Ionicons
+                        name="mail-unread-outline"
+                        size={20}
+                        color={n.leida ? '#00AEEF' : '#0D1B3E'}
+                      />
+                    </View>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <View style={s.titleRow}>
+                        <Text style={s.conductorNombre}>Sistema de Solicitudes</Text>
+                        <Text style={s.tipoText}>Solicitud</Text>
+                      </View>
+                      <Text
+                        style={[s.notifTexto, !n.leida && s.notifTextoUnread]}
+                        numberOfLines={abierta ? undefined : 2}
+                      >
+                        {n.mensaje}
+                      </Text>
+                      {abierta && (
+                        <TouchableOpacity
+                          style={s.btnRedirigirMarketplace}
+                          onPress={() => navigation.navigate('Marketplace', { usuario })}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="open-outline" size={14} color="#0D1B3E" />
+                          <Text style={s.btnRedirigirMarketplaceText}>Ir a solicitudes</Text>
+                        </TouchableOpacity>
+                      )}
+                      <View style={s.metaRow}>
+                        <Ionicons name="time-outline" size={12} color="#9AA4B2" />
+                        <Text style={s.fechaText}>{formatearFecha(n.fecha)}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </ScrollView>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -552,4 +693,54 @@ const s = StyleSheet.create({
   histPadres: { fontSize: 11, color: '#0D1B3E', fontWeight: '700' },
   emptyBox: { alignItems: 'center', paddingTop: 48, gap: 12 },
   emptyText: { fontSize: 14, color: '#8A94A6' },
+  notifCard: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    backgroundColor: '#F5F8FC', borderRadius: 14,
+    borderWidth: 1.5, borderColor: '#E3ECF7',
+    padding: 14, marginBottom: 10,
+    position: 'relative',
+  },
+  notifCardUnread: {
+    borderColor: '#FFD700',
+    backgroundColor: '#FFFDF6',
+  },
+  unreadDot: {
+    position: 'absolute',
+    left: 6, top: 22,
+    width: 6, height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF3B30',
+  },
+  notifIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#EFF8FF', alignItems: 'center', justifyContent: 'center',
+  },
+  notifIconUnread: {
+    backgroundColor: '#FFF9D0',
+  },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5, gap: 8 },
+  conductorNombre: { fontSize: 13, fontWeight: '700', color: '#0D1B3E' },
+  tipoText: { fontSize: 10, color: '#00AEEF', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  notifTexto: { fontSize: 13, color: '#555', lineHeight: 18, marginBottom: 8 },
+  notifTextoUnread: { color: '#0D1B3E', fontWeight: '600' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  fechaText: { fontSize: 11, color: '#8A94A6' },
+  btnRedirigirMarketplace: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: '#FFD700',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  btnRedirigirMarketplaceText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0D1B3E',
+  },
+  emptySub: { fontSize: 12, color: '#8A94A6', textAlign: 'center', marginTop: 2 },
 });

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   StatusBar, ScrollView, Alert, Animated,
-  FlatList, TextInput, Platform
+  FlatList, TextInput, Platform, Linking
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -151,7 +151,28 @@ function ViajePadre({ usuario, bottomInset }) {
             <Text style={styles.conductorSub}>{viaje.conductor.vehiculo} · {viaje.conductor.placa}</Text>
           </View>
           <TouchableOpacity style={styles.btnWA}
-            onPress={() => Alert.alert('WhatsApp', `Contactar a ${viaje.conductor.nombre}`)}>
+            onPress={async () => {
+              const telefono = viaje.conductor.telefono;
+              if (!telefono) {
+                Alert.alert('Error', 'El conductor no tiene un número de teléfono registrado.');
+                return;
+              }
+              const num = telefono.replace(/[^0-9]/g, '');
+              const fullNum = num.startsWith('507') ? num : `507${num}`;
+              const mensaje = `Hola, buenas. Quería consultarle sobre el viaje de BusWay.`;
+              const url = `https://wa.me/${fullNum}?text=${encodeURIComponent(mensaje)}`;
+              try {
+                const soportado = await Linking.canOpenURL(url);
+                if (soportado) {
+                  await Linking.openURL(url);
+                } else {
+                  Alert.alert('Error', 'No se pudo abrir WhatsApp. Verifica que esté instalado.');
+                }
+              } catch (err) {
+                console.log('Error opening whatsapp link:', err);
+                Alert.alert('Error', 'No se pudo abrir WhatsApp.');
+              }
+            }}>
             <Ionicons name="logo-whatsapp" size={18} color="#fff" />
           </TouchableOpacity>
         </View>

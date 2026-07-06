@@ -4,28 +4,26 @@ const verifyToken = require('../middleware/verifyToken');
 const Escuela = require('../models/Escuela');
 const requireRole = require('../middleware/requireRole');
 
-router.use(verifyToken, requireRole('administrador'));
-
-// GET todas las escuelas activas (público)
-router.get('/', async (req, res) => {
+// GET todas las escuelas activas — accesible para cualquier usuario autenticado
+router.get('/', verifyToken, async (req, res) => {
   try {
     const escuelas = await Escuela.find({
       estado: { $in: ['activa', 'Activa'] }
-    }).select('_id nombre').sort({ nombre: 1 });
+    }).sort({ nombre: 1 });
     res.json({ escuelas });
   } catch (error) {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
-// POST crear escuela
-router.post('/', async (req, res) => {
+// POST y DELETE — solo administrador
+router.post('/', verifyToken, requireRole('administrador'), async (req, res) => {
   try {
-    const { nombre, distrito } = req.body;
-    if (!nombre || !distrito) {
-      return res.status(400).json({ error: 'Nombre y distrito son obligatorios' });
+    const { nombre, provincia, distrito, direccion } = req.body;
+    if (!nombre || !provincia || !distrito) {
+      return res.status(400).json({ error: 'Nombre, provincia y distrito son obligatorios' });
     }
-    const escuela = new Escuela({ nombre, distrito });
+    const escuela = new Escuela({ nombre, provincia, distrito, direccion });
     await escuela.save();
     res.status(201).json({ mensaje: 'Escuela creada', escuela });
   } catch (error) {
@@ -33,8 +31,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// DELETE eliminar escuela
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', verifyToken, requireRole('administrador'), async (req, res) => {
   try {
     const escuela = await Escuela.findByIdAndDelete(req.params.id);
     if (!escuela) return res.status(404).json({ error: 'Escuela no encontrada' });

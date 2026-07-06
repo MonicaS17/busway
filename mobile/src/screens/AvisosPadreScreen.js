@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
   StyleSheet, StatusBar, RefreshControl, ActivityIndicator,
-  Alert,
+  Alert, Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -69,6 +69,12 @@ export default function AvisosPadreScreen({ navigation }) {
     return () => clearInterval(intervalo);
   }, [cargarNotificaciones]);
 
+  useEffect(() => {
+    if (notificaciones.length > 0 && sinLeer > 0 && !marcandoTodas) {
+      marcarTodasLeidas();
+    }
+  }, [notificaciones, sinLeer, marcandoTodas]);
+
   const marcarLeida = async (id) => {
     setNotificaciones((prev) =>
       prev.map((n) => (n._id === id ? { ...n, leida: true } : n))
@@ -93,6 +99,31 @@ export default function AvisosPadreScreen({ navigation }) {
     }
     setExpandida(id);
     marcarLeida(id);
+  };
+
+  const handleContactarConductor = async (conductor) => {
+    const telefono = conductor?.telefono || conductor?.datos_conductor?.telefono;
+    if (!telefono) {
+      Alert.alert('Error', 'El conductor no tiene un número de teléfono registrado.');
+      return;
+    }
+    const num = telefono.replace(/[^0-9]/g, '');
+    const fullNum = num.startsWith('507') ? num : `507${num}`;
+    
+    const mensaje = `Hola, buenas. Quería consultarle sobre el servicio de BusWay.`;
+    const url = `https://wa.me/${fullNum}?text=${encodeURIComponent(mensaje)}`;
+    
+    try {
+      const soportado = await Linking.canOpenURL(url);
+      if (soportado) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'No se pudo abrir WhatsApp. Verifica que esté instalado.');
+      }
+    } catch (err) {
+      console.log('Error opening whatsapp link:', err);
+      Alert.alert('Error', 'No se pudo abrir WhatsApp.');
+    }
   };
 
   const marcarTodasLeidas = async () => {
@@ -229,12 +260,24 @@ export default function AvisosPadreScreen({ navigation }) {
                   </Text>
 
                   {abierta && (
-                    <View style={s.hijosRow}>
-                      <Ionicons name="people-outline" size={13} color="#00AEEF" />
-                      <Text style={s.hijosText}>
-                        Aplica a: {hijos.length > 0 ? hijos.map((hijo) => hijo.nombre).join(', ') : 'tu ruta'}
-                      </Text>
-                    </View>
+                    <>
+                      <View style={s.hijosRow}>
+                        <Ionicons name="people-outline" size={13} color="#00AEEF" />
+                        <Text style={s.hijosText}>
+                          Aplica a: {hijos.length > 0 ? hijos.map((hijo) => hijo.nombre).join(', ') : 'tu ruta'}
+                        </Text>
+                      </View>
+                      {(n.conductor_id?.telefono || n.conductor_id?.datos_conductor?.telefono) && (
+                        <TouchableOpacity
+                          style={s.btnChatConductor}
+                          onPress={() => handleContactarConductor(n.conductor_id)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="logo-whatsapp" size={14} color="#FFF" />
+                          <Text style={s.btnChatConductorText}>Contactar Conductor</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
                   )}
 
                   <View style={s.metaRow}>
@@ -356,4 +399,21 @@ const s = StyleSheet.create({
   emptyBox: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyText: { fontSize: 15, color: '#8A94A6', fontWeight: '600' },
   emptySub: { fontSize: 12, color: '#AEB7C4', textAlign: 'center', paddingHorizontal: 32 },
+  btnChatConductor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: '#25D366',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  btnChatConductorText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
+  },
 });

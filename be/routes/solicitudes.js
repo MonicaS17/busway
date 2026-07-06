@@ -5,6 +5,7 @@ const Solicitud = require('../models/Solicitud');
 const Usuario = require('../models/Usuario');
 const Estudiante = require('../models/Estudiante');
 const Acuerdo = require('../models/Acuerdo');
+const Notificacion = require('../models/Notificacion');
 
 async function obtenerUsuario(req, res) {
   const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
@@ -28,7 +29,7 @@ router.post('/', verifyToken, async (req, res) => {
     }
 
     const { conductor_id, hijos_ids, tarifa_mensual, escuela } = req.body;
-    if (!conductor_id || !hijos_ids || !hijos_ids.length || !tarifa_mensual || !escuela) {
+    if (!conductor_id || !hijos_ids || !hijos_ids.length || tarifa_mensual === undefined || tarifa_mensual === null || !escuela) {
       return res.status(400).json({
         error: 'Faltan datos requeridos: conductor_id, hijos_ids, tarifa_mensual, escuela',
       });
@@ -51,6 +52,15 @@ router.post('/', verifyToken, async (req, res) => {
       tarifa_mensual,
       escuela,
       estado: 'pendiente',
+    });
+
+    // Crear notificación para el conductor
+    await Notificacion.create({
+      conductor_id,
+      tipo: 'solicitud',
+      mensaje: `Te llegó una nueva solicitud de servicio de ${padre.nombre} ${padre.apellido || ''} para su hijo/a en ${escuela}.`,
+      destinatarios: [conductor_id],
+      fecha: new Date(),
     });
 
     res.status(201).json({ mensaje: 'Solicitud enviada correctamente', solicitud });
@@ -117,28 +127,55 @@ router.patch('/:id/aceptar', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Esta solicitud ya fue procesada' });
     }
 
+    const { tarifa_mensual } = req.body;
+    const tarifaFinal = (tarifa_mensual !== undefined && tarifa_mensual !== null)
+      ? Number(tarifa_mensual)
+      : solicitud.tarifa_mensual;
+
     solicitud.estado = 'aceptada';
+    solicitud.tarifa_mensual = tarifaFinal;
     await solicitud.save();
+
+    // Buscar la ruta del conductor que coincida con la escuela de la solicitud (o fallback a la primera que tenga)
+    const Ruta = require('../models/Ruta');
+    let rutaConductor = await Ruta.findOne({ conductor_id: conductor._id, escuela: solicitud.escuela });
+    if (!rutaConductor) {
+      rutaConductor = await Ruta.findOne({ conductor_id: conductor._id });
+    }
+
+    const updateFields = { conductor_id: conductor._id };
+    if (rutaConductor) {
+      updateFields.ruta_id = rutaConductor._id;
+    }
 
     await Estudiante.updateMany(
       { _id: { $in: solicitud.hijos_ids } },
-      { conductor_id: conductor._id }
+      updateFields
     );
 
     const membresia = MEMBRESIA_DEFAULT;
-    const total_mensual = solicitud.tarifa_mensual + membresia;
+    const total_mensual = tarifaFinal + membresia;
 
     const acuerdo = await Acuerdo.create({
       solicitud_id: solicitud._id,
       padre_id: solicitud.padre_id,
       conductor_id: conductor._id,
-      tarifa_mensual: solicitud.tarifa_mensual,
+      tarifa_mensual: tarifaFinal,
       membresia,
       total_mensual,
       mes_actual: 1,
       total_meses: TOTAL_MESES_DEFAULT,
       estado: 'activo',
       fecha_inicio: new Date(),
+    });
+
+    // Crear notificación para el padre
+    await Notificacion.create({
+      conductor_id: conductor._id,
+      tipo: 'solicitud',
+      mensaje: `Tu solicitud de servicio para la escuela ${solicitud.escuela} ha sido ACEPTADA por el conductor ${conductor.nombre} ${conductor.apellido || ''}.`,
+      destinatarios: [solicitud.padre_id],
+      fecha: new Date(),
     });
 
     res.json({
@@ -170,6 +207,15 @@ router.patch('/:id/rechazar', verifyToken, async (req, res) => {
     if (!solicitud) {
       return res.status(404).json({ error: 'Solicitud no encontrada o ya fue procesada' });
     }
+
+    // Crear notificación para el padre
+    await Notificacion.create({
+      conductor_id: conductor._id,
+      tipo: 'solicitud',
+      mensaje: `Tu solicitud de servicio para la escuela ${solicitud.escuela} ha sido RECHAZADA por el conductor ${conductor.nombre} ${conductor.apellido || ''}.`,
+      destinatarios: [solicitud.padre_id],
+      fecha: new Date(),
+    });
 
     res.json({ mensaje: 'Solicitud rechazada', solicitud });
   } catch (error) {

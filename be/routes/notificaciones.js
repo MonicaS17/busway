@@ -39,27 +39,33 @@ function formatearNotificacion(notificacion, usuarioId) {
 async function obtenerAsistentesDelDia(conductor) {
   const viaje = await Viaje.findOne({
     conductor_id: conductor._id,
-    estado: 'en_curso',
+    estado: { $in: ['activo', 'en_curso'] },
   }).sort({ createdAt: -1, hora_salida: -1 });
 
-  if (!viaje) {
+  let rutaId = viaje ? viaje.ruta_id : null;
+
+  if (!rutaId) {
+    // Si no hay viaje activo, buscar la primera ruta activa del conductor
+    const Ruta = require('../models/Ruta');
+    const ruta = await Ruta.findOne({ conductor_id: conductor._id, estado: 'activa' });
+    if (ruta) {
+      rutaId = ruta._id;
+    }
+  }
+
+  if (!rutaId) {
     return { estudiantes: [], viajeId: null };
   }
 
-  const hijosIds = [...new Set((viaje.estudiantes_abordo || []).map(String))];
-  if (hijosIds.length === 0) {
-    return { estudiantes: [], viajeId: viaje._id };
-  }
-
   const estudiantes = await Estudiante.find({
-    _id: { $in: hijosIds },
+    ruta_id: rutaId,
     conductor_id: conductor._id,
     estado: 'Activo',
   })
     .select('_id nombre padre_id')
     .populate('padre_id', 'nombre apellido correo');
 
-  return { estudiantes, viajeId: viaje._id };
+  return { estudiantes, viajeId: viaje ? viaje._id : null };
 }
 
 async function obtenerDestinatarios(conductor, audiencia, estudianteId) {
@@ -178,7 +184,7 @@ router.get('/conductor/historial', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Acceso exclusivo para conductores' });
     }
 
-    const notificaciones = await Notificacion.find({ conductor_id: conductor._id })
+    const notificaciones = await Notificacion.find({ conductor_id: conductor._id, tipo: { $ne: 'solicitud' } })
       .sort({ fecha: -1 })
       .limit(50)
       .populate('hijos_ids', 'nombre')
@@ -201,7 +207,7 @@ router.get('/padre', verifyToken, async (req, res) => {
     const notificaciones = await Notificacion.find({ destinatarios: padre._id })
       .sort({ fecha: -1 })
       .limit(50)
-      .populate('conductor_id', 'nombre apellido correo')
+      .populate('conductor_id', 'nombre apellido correo telefono datos_conductor')
       .populate('hijos_ids', 'nombre padre_id');
 
     const datos = notificaciones.map((notificacion) => {
@@ -259,6 +265,87 @@ router.patch('/padre/marcar-leidas/todas', verifyToken, async (req, res) => {
     await Notificacion.updateMany(
       { destinatarios: padre._id, 'lecturas.usuario_id': { $ne: padre._id } },
       { $push: { lecturas: { usuario_id: padre._id, fecha_lectura: new Date() } } }
+    );
+
+    res.json({ mensaje: 'Notificaciones marcadas como leidas' });
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudieron marcar las notificaciones' });
+  }
+});
+
+router.get('/conductor/recibidas', verifyToken, async (req, res) => {
+  try {
+    const conductor = await usuarioAutenticado(req, res);
+    if (!conductor) return;
+    if (conductor.tipo !== 'conductor') {
+      return res.status(403).json({ error: 'Acceso exclusivo para conductores' });
+    }
+
+    const notificaciones = await Notificacion.find({
+      destinatarios: conductor._id,
+      tipo: 'solicitud',
+    })
+      .sort({ fecha: -1 })
+      .limit(50)
+      .populate({
+        path: 'hijos_ids',
+        select: 'nombre padre_id',
+        populate: {
+          path: 'padre_id',
+          select: 'nombre apellido correo telefono datos_padre'
+        }
+      });
+
+    const datos = notificaciones.map((notificacion) => {
+      return formatearNotificacion(notificacion, conductor._id);
+    });
+
+    res.json({
+      notificaciones: datos,
+      sinLeer: datos.filter((n) => !n.leida).length,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudieron obtener las notificaciones' });
+  }
+});
+
+router.patch('/conductor/:id/leida', verifyToken, async (req, res) => {
+  try {
+    const conductor = await usuarioAutenticado(req, res);
+    if (!conductor) return;
+    if (conductor.tipo !== 'conductor') {
+      return res.status(403).json({ error: 'Acceso exclusivo para conductores' });
+    }
+
+    const notificacion = await Notificacion.findOneAndUpdate(
+      { _id: req.params.id, destinatarios: conductor._id, 'lecturas.usuario_id': { $ne: conductor._id } },
+      { $push: { lecturas: { usuario_id: conductor._id, fecha_lectura: new Date() } } },
+      { new: true }
+    );
+
+    if (!notificacion) {
+      const existente = await Notificacion.findOne({ _id: req.params.id, destinatarios: conductor._id });
+      if (!existente) return res.status(404).json({ error: 'Notificacion no encontrada' });
+      return res.json({ notificacion: formatearNotificacion(existente, conductor._id) });
+    }
+
+    res.json({ notificacion: formatearNotificacion(notificacion, conductor._id) });
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo marcar como leida' });
+  }
+});
+
+router.patch('/conductor/marcar-leidas/todas', verifyToken, async (req, res) => {
+  try {
+    const conductor = await usuarioAutenticado(req, res);
+    if (!conductor) return;
+    if (conductor.tipo !== 'conductor') {
+      return res.status(403).json({ error: 'Acceso exclusivo para conductores' });
+    }
+
+    await Notificacion.updateMany(
+      { destinatarios: conductor._id, tipo: 'solicitud', 'lecturas.usuario_id': { $ne: conductor._id } },
+      { $push: { lecturas: { usuario_id: conductor._id, fecha_lectura: new Date() } } }
     );
 
     res.json({ mensaje: 'Notificaciones marcadas como leidas' });

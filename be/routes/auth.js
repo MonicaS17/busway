@@ -222,4 +222,47 @@ router.patch('/ubicacion', verifyToken, async (req, res) => {
   }
 });
 
+// Actualizar información del perfil
+router.patch('/perfil/actualizar', verifyToken, async (req, res) => {
+  try {
+    const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const { nombre, apellido, foto_perfil, telefono, banco_info } = req.body;
+
+    if (nombre) usuario.nombre = nombre;
+    if (apellido) usuario.apellido = apellido;
+    if (foto_perfil !== undefined) usuario.foto_perfil = foto_perfil;
+
+    if (usuario.tipo === 'conductor') {
+      if (telefono || banco_info !== undefined) {
+        usuario.datos_conductor = {
+          ...(usuario.datos_conductor || {}),
+        };
+        if (telefono) usuario.datos_conductor.telefono = telefono;
+        if (banco_info !== undefined) usuario.datos_conductor.banco_info = banco_info;
+        
+        usuario.markModified('datos_conductor');
+      }
+    }
+
+    await usuario.save();
+
+    const usuarioRespuesta = usuario.toObject();
+    if (usuario.tipo === 'conductor') {
+      usuarioRespuesta.vehiculo = await Vehiculo.findOne({ conductor_id: usuario._id });
+    }
+
+    res.json({
+      mensaje: 'Perfil actualizado correctamente',
+      usuario: usuarioRespuesta,
+    });
+  } catch (error) {
+    console.error('Error actualizando perfil:', error);
+    res.status(500).json({ error: 'Error interno al actualizar el perfil' });
+  }
+});
+
 module.exports = router;

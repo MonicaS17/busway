@@ -10,4 +10,10 @@ const estudianteSchema = new mongoose.Schema({
   fecha_registro: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.models.estudiantes || mongoose.model('estudiantes', estudianteSchema);
+const Estudiante = mongoose.models.Estudiante || mongoose.model('Estudiante', estudianteSchema);
+
+if (!mongoose.models.estudiantes) {
+  mongoose.model('estudiantes', estudianteSchema);
+}
+
+module.exports = Estudiante;

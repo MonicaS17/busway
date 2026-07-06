@@ -154,7 +154,7 @@ export default function useViaje({ usuario, esPadre }) {
   useEffect(() => {
     if (rutaData.loading || !rutaData.rutaInfo?._id) return;
 
-    const socketClient = io(BACKEND_URL);
+    const socketClient = io(BACKEND_URL, { transports: ['websocket'] });
     socketRef.current = socketClient;
 
     socketClient.on('connect', () => {

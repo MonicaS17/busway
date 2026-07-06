@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const notificacionSchema = new mongoose.Schema({
   conductor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'usuarios', required: true },
-  tipo: { type: String, enum: ['masiva', 'individual', 'emergencia'], required: true },
+  tipo: { type: String, enum: ['masiva', 'individual', 'emergencia', 'solicitud'], required: true },
   mensaje: { type: String, required: true },
   destinatarios: [{ type: mongoose.Schema.Types.ObjectId, ref: 'usuarios' }],
   hijos_ids: [{ type: mongoose.Schema.Types.ObjectId, ref: 'estudiantes' }],

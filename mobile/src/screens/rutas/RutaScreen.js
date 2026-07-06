@@ -81,7 +81,9 @@ function RutaPadre({ navigation, usuario }) {
         }
 
         const firstChild = resHijos.data.hijos[0];
-        const condId = firstChild.conductor_id;
+        const condId = firstChild.conductor_id && typeof firstChild.conductor_id === 'object'
+          ? firstChild.conductor_id._id
+          : firstChild.conductor_id;
         
         if (!condId) {
           setRuta(null);
@@ -168,7 +170,13 @@ function RutaPadre({ navigation, usuario }) {
     };
 
     fetchPadreRuta();
-  }, [usuario]);
+
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchPadreRuta();
+    });
+
+    return unsubscribe;
+  }, [navigation, usuario]);
 
   if (loading) {
     return (
@@ -530,7 +538,7 @@ function RutaConductor({ navigation, usuario }) {
         nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
         zona: e.zona || 'Arraiján',
         escuela: e.escuela || (resRuta.data?.ruta?.escuela_id ? (typeof resRuta.data.ruta.escuela_id === 'object' ? resRuta.data.ruta.escuela_id.nombre : resRuta.data.ruta.escuela) : (resRuta.data?.ruta?.escuela || 'Colegio San Agustín')),
-        ruta_id: e.ruta_id || null,
+        ruta_id: e.ruta_id && typeof e.ruta_id === 'object' ? e.ruta_id._id : (e.ruta_id || null),
         inputPos: (idx + 1).toString(),
       }));
 
@@ -565,13 +573,22 @@ function RutaConductor({ navigation, usuario }) {
 
   useEffect(() => {
     fetchConductorRutaYEstudiantes();
-  }, [usuario]);
+
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchConductorRutaYEstudiantes();
+    });
+
+    return unsubscribe;
+  }, [navigation, usuario]);
 
   useEffect(() => {
     if (mostrarCrear) {
       const cargarEscuelas = async () => {
         try {
-          const res = await api.get('/api/escuelas');
+          const token = await auth.currentUser.getIdToken();
+          const res = await api.get('/api/escuelas', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
           if (res.data && res.data.escuelas) {
             setListaEscuelas(res.data.escuelas);
           }

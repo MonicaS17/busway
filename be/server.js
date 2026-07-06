@@ -59,21 +59,8 @@ app.get('/', (req, res) => {
   res.json({ mensaje: 'Backend BusWay funcionando con Sockets y Rutas de Viajes habilitadas 🚀' });
 });
 
-// Inicialización inline del socketHandler para que el servidor levante de inmediato
-const socketHandler = (ioInstance) => {
-  ioInstance.on('connection', (socket) => {
-    console.log(`🔌 Cliente conectado a Sockets: ${socket.id}`);
-    
-    // Dejamos los listeners preparados para el flujo de Grace (Asistencia y GPS)
-    socket.on('join_room', (data) => socket.join(data));
-    
-    socket.on('disconnect', () => {
-      console.log(`❌ Cliente desconectado de Sockets: ${socket.id}`);
-    });
-  });
-};
-
-// Inicialización usando nuestra función segura temporal
+// Inicialización del socketHandler real
+const socketHandler = require('./sockets/socketHandler');
 socketHandler(io);
 
 // Conexión a MongoDB y Arranque del Servidor

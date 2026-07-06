@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity,
   StyleSheet, StatusBar, Alert, ScrollView,
-  Modal, ActivityIndicator
+  Modal, ActivityIndicator, TextInput, RefreshControl, AppState
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +23,25 @@ const ESTADO_PAGO_CFG = {
 export default function PaymentsScreen({ navigation, route }) {
   const { usuario } = route.params || {};
   const esConductor = usuario?.tipo === 'conductor';
+  const [perfilUsuario, setPerfilUsuario] = useState(usuario);
+
+  useEffect(() => {
+    cargarPerfil();
+  }, []);
+
+  async function cargarPerfil() {
+    try {
+      const token = await obtenerToken();
+      const { data } = await api.get('/api/auth/perfil', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (data?.usuario) {
+        setPerfilUsuario(data.usuario);
+      }
+    } catch (err) {
+      console.log('Error cargando perfil:', err);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -42,7 +61,9 @@ export default function PaymentsScreen({ navigation, route }) {
       </View>
 
       <View style={styles.card}>
-        {esConductor ? <VistaConductor /> : <VistaPadre usuario={usuario} />}
+        {esConductor 
+          ? <VistaConductor usuario={perfilUsuario} onRefreshUsuario={cargarPerfil} /> 
+          : <VistaPadre usuario={perfilUsuario} />}
       </View>
     </SafeAreaView>
   );
@@ -98,9 +119,30 @@ function VistaPadre({ usuario }) {
     return proximo.toLocaleDateString('es-PA');
   })();
 
+  const [refrescando, setRefrescando] = useState(false);
+
+  const alRefrescar = useCallback(async () => {
+    setRefrescando(true);
+    await Promise.all([cargarAcuerdo(), cargarHistorial()]);
+    setRefrescando(false);
+  }, []);
+
   useEffect(() => {
     cargarAcuerdo();
     cargarHistorial();
+
+    // Auto-refrescar cuando el usuario regresa a la app desde el navegador
+    const handleAppStateChange = (nextAppState) => {
+      if (nextAppState === 'active') {
+        cargarAcuerdo();
+        cargarHistorial();
+      }
+    };
+
+    const appStateSub = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      appStateSub.remove();
+    };
   }, []);
 
   async function cargarAcuerdo() {
@@ -141,12 +183,15 @@ function VistaPadre({ usuario }) {
     if (!url) return;
     const parsed = Linking.parse(url);
 
-    if (parsed.path?.includes('checkout-success') || parsed.hostname?.includes('checkout-success')) {
-      const sessionId = parsed.queryParams?.session_id;
+    const isSuccess = url.includes('checkout-success') || parsed.path?.includes('checkout-success') || parsed.hostname?.includes('checkout-success');
+    const isCancel = url.includes('checkout-cancel') || parsed.path?.includes('checkout-cancel') || parsed.hostname?.includes('checkout-cancel');
+
+    if (isSuccess) {
+      const sessionId = parsed.queryParams?.session_id || url.match(/[?&]session_id=([^&]+)/)?.[1];
       setModalEstado('procesando');
       setMensajeEstado('Confirmando tu pago con Stripe...');
       verificarSesionStripe(sessionId);
-    } else if (parsed.path?.includes('checkout-cancel') || parsed.hostname?.includes('checkout-cancel')) {
+    } else if (isCancel) {
       setModalEstado(null);
       Alert.alert('Pago cancelado', 'Puedes intentar nuevamente cuando quieras.');
     }
@@ -188,9 +233,15 @@ function VistaPadre({ usuario }) {
     try {
       setCargandoCheckout(true);
       const token = await obtenerToken();
+      const successUrl = Linking.createURL('checkout-success');
+      const cancelUrl = Linking.createURL('checkout-cancel');
+
       const { data } = await api.post(
         '/api/stripe/create-checkout-session',
-        {},
+        {
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -210,12 +261,12 @@ function VistaPadre({ usuario }) {
   async function cancelarSuscripcion() {
     if (!acuerdo?._id) return;
     Alert.alert(
-      'Cancelar suscripción',
-      '¿Seguro que quieres cancelar el cobro automático?',
+      'Finalizar Contrato Escolar',
+      '¿Seguro que deseas finalizar el contrato con el conductor?\n\nAl hacerlo, se cancelará el cobro automático de tu tarjeta de crédito, se liberará el cupo de tu hijo en el colegial y el servicio dejará de estar activo.',
       [
-        { text: 'No', style: 'cancel' },
+        { text: 'Volver', style: 'cancel' },
         {
-          text: 'Sí, cancelar',
+          text: 'Sí, finalizar contrato',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -226,9 +277,9 @@ function VistaPadre({ usuario }) {
                 { headers: { Authorization: `Bearer ${token}` } }
               );
               await cargarAcuerdo();
-              Alert.alert('Listo', 'Tu suscripción fue cancelada.');
+              Alert.alert('Contrato Finalizado', 'Tu suscripción y contrato escolar han sido cancelados con éxito.');
             } catch (e) {
-              Alert.alert('Error', 'No se pudo cancelar. Intenta de nuevo.');
+              Alert.alert('Error', 'No se pudo finalizar el contrato. Intenta de nuevo.');
             }
           },
         },
@@ -237,7 +288,13 @@ function VistaPadre({ usuario }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={styles.body}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refrescando} onRefresh={alRefrescar} colors={['#0D1B3E']} />
+      }
+    >
 
       {/* Sin contrato activo */}
       {!cargandoAcuerdo && !acuerdo && (
@@ -506,15 +563,48 @@ function FilaRecibo({ label, valor, destacado }) {
 }
 
 // ─── VISTA CONDUCTOR ──────────────────────────────────────────────────────────
-function VistaConductor() {
+function VistaConductor({ usuario, onRefreshUsuario }) {
   const [pagos, setPagos] = useState([]);
+  const [acuerdos, setAcuerdos] = useState([]);
   const [contratosActivos, setContratosActivos] = useState(0);
   const [totalRecibido, setTotalRecibido] = useState(0);
   const [rutaActiva, setRutaActiva] = useState('Todas las rutas');
   const [cargando, setCargando] = useState(true);
+  const [cancelandoId, setCancelandoId] = useState(null);
+
+  // States para registro de cuenta bancaria/cobro
+  const [bancoNombre, setBancoNombre] = useState('');
+  const [bancoTipo, setBancoTipo] = useState('Ahorros');
+  const [bancoCuenta, setBancoCuenta] = useState('');
+  const [bancoTitular, setBancoTitular] = useState('');
+  const [guardandoBanco, setGuardandoBanco] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const habilitado = bancoNombre.trim() && bancoCuenta.trim() && bancoTitular.trim();
+
+  const [refrescando, setRefrescando] = useState(false);
+
+  const alRefrescar = useCallback(async () => {
+    setRefrescando(true);
+    await Promise.all([cargarDatos(), onRefreshUsuario()]);
+    setRefrescando(false);
+  }, []);
 
   useEffect(() => {
     cargarDatos();
+
+    // Auto-refrescar cuando el conductor regresa a la app
+    const handleAppStateChange = (nextAppState) => {
+      if (nextAppState === 'active') {
+        cargarDatos();
+        onRefreshUsuario();
+      }
+    };
+
+    const appStateSub = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      appStateSub.remove();
+    };
   }, []);
 
   async function cargarDatos() {
@@ -528,12 +618,48 @@ function VistaConductor() {
       setPagos(pagosRes.data?.pagos || []);
       setTotalRecibido(pagosRes.data?.totalRecibido || 0);
       setContratosActivos(acuerdosRes.data?.total || 0);
+      setAcuerdos(acuerdosRes.data?.acuerdos || []);
     } catch (err) {
       console.error('Error cargando pagos del conductor:', err?.response?.data || err?.message);
     } finally {
       setCargando(false);
     }
   }
+
+  const handleCancelarContrato = (acuerdo) => {
+    const padreNombre = acuerdo.padre_id
+      ? `${acuerdo.padre_id.nombre} ${acuerdo.padre_id.apellido || ''}`
+      : 'Padre';
+    Alert.alert(
+      'Finalizar Contrato',
+      `¿Deseas finalizar el contrato con ${padreNombre}?\n\nAl hacerlo, se cancelará el cobro automático a su tarjeta de crédito y los estudiantes asociados se eliminarán de tu ruta actual, liberando sus vacantes en tu colegial.`,
+      [
+        { text: 'Volver', style: 'cancel' },
+        {
+          text: 'Sí, finalizar contrato',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelandoId(acuerdo._id);
+            try {
+              const token = await obtenerToken();
+              await api.post('/api/stripe/cancel-subscription', {
+                acuerdoId: acuerdo._id
+              }, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              Alert.alert('Contrato Finalizado', 'El contrato ha sido cancelado con éxito y las vacantes han sido liberadas.');
+              await cargarDatos();
+            } catch (err) {
+              console.error('Error finalizando contrato:', err);
+              Alert.alert('Error', err.response?.data?.error || 'No se pudo finalizar el contrato');
+            } finally {
+              setCancelandoId(null);
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const escuelas = ['Todas las rutas', ...new Set(pagos.map(p => p.escuela).filter(Boolean))];
 
@@ -557,8 +683,135 @@ function VistaConductor() {
     );
   }
 
+  if (!usuario?.datos_conductor?.banco_info) {
+    return (
+      <ScrollView
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refrescando} onRefresh={alRefrescar} colors={['#0D1B3E']} />
+        }
+      >
+        <View style={styles.alertaPago}>
+          <View style={styles.alertaPagoIcono}>
+            <Ionicons name="wallet-outline" size={24} color="#0D1B3E" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.alertaPagoTitulo}>Configura tu Cuenta de Cobro</Text>
+            <Text style={styles.alertaPagoDesc}>
+              Para poder recibir los ingresos mensuales de los padres de familia, primero debes vincular tu cuenta bancaria o tarjeta de cobro.
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>Datos de Transferencia</Text>
+        
+        <Text style={styles.inputLabel}>Nombre del Banco</Text>
+        <TextInput
+          style={styles.formInput}
+          placeholder="Ej: Banco General, Banistmo..."
+          placeholderTextColor="#aaa"
+          value={bancoNombre}
+          onChangeText={setBancoNombre}
+        />
+
+        <Text style={[styles.inputLabel, { marginTop: 14 }]}>Tipo de Cuenta</Text>
+        <TouchableOpacity
+          style={styles.dropdownSelector}
+          onPress={() => setDropdownOpen(!dropdownOpen)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.dropdownSelectorText}>{bancoTipo}</Text>
+          <Ionicons name={dropdownOpen ? 'chevron-up-outline' : 'chevron-down-outline'} size={16} color="#888" />
+        </TouchableOpacity>
+
+        {dropdownOpen && (
+          <View style={{ backgroundColor: '#F5F8FC', borderRadius: 12, marginTop: 4, borderWidth: 1, borderColor: '#E3ECF7', overflow: 'hidden' }}>
+            {['Ahorros', 'Corriente'].map(tipo => (
+              <TouchableOpacity
+                key={tipo}
+                style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: tipo === 'Ahorros' ? 1 : 0, borderBottomColor: '#E3ECF7' }}
+                onPress={() => {
+                  setBancoTipo(tipo);
+                  setDropdownOpen(false);
+                }}
+              >
+                <Text style={{ fontSize: 14, color: '#0D1B3E', fontWeight: bancoTipo === tipo ? '700' : '400' }}>{tipo}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <Text style={[styles.inputLabel, { marginTop: 14 }]}>Número de Cuenta o Tarjeta</Text>
+        <TextInput
+          style={styles.formInput}
+          placeholder="Ej: 04729831948"
+          placeholderTextColor="#aaa"
+          value={bancoCuenta}
+          onChangeText={setBancoCuenta}
+          keyboardType="numeric"
+        />
+
+        <Text style={[styles.inputLabel, { marginTop: 14 }]}>Nombre del Titular</Text>
+        <TextInput
+          style={styles.formInput}
+          placeholder="Ej: Juan Pérez"
+          placeholderTextColor="#aaa"
+          value={bancoTitular}
+          onChangeText={setBancoTitular}
+        />
+
+        <TouchableOpacity
+          style={[styles.btnGuardar, (!habilitado || guardandoBanco) && styles.btnDisabled]}
+          onPress={async () => {
+            if (!habilitado || guardandoBanco) return;
+            setGuardandoBanco(true);
+            try {
+              const token = await obtenerToken();
+              await api.patch('/api/auth/perfil/actualizar', {
+                banco_info: {
+                  banco_nombre: bancoNombre,
+                  banco_tipo: bancoTipo,
+                  banco_cuenta: bancoCuenta,
+                  banco_titular: bancoTitular
+                }
+              }, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              Alert.alert('Registro Exitoso', 'Tu información de cobro ha sido guardada correctamente.');
+              await onRefreshUsuario();
+            } catch (err) {
+              console.error(err);
+              Alert.alert('Error', 'No se pudo guardar la información de cobro.');
+            } finally {
+              setGuardandoBanco(false);
+            }
+          }}
+          disabled={!habilitado || guardandoBanco}
+          activeOpacity={0.85}
+        >
+          {guardandoBanco ? (
+            <ActivityIndicator size="small" color="#0D1B3E" />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle-outline" size={18} color="#0D1B3E" />
+              <Text style={styles.btnGuardarText}>Guardar Cuenta de Cobro</Text>
+            </>
+          )}
+        </TouchableOpacity>
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    );
+  }
+
   return (
-    <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={styles.body}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refrescando} onRefresh={alRefrescar} colors={['#0D1B3E']} />
+      }
+    >
 
       <View style={styles.metricasGrid}>
         <View style={[styles.metricaCard, { flex: 1.1 }]}>
@@ -591,7 +844,76 @@ function VistaConductor() {
         </Text>
       </View>
 
-      <Text style={styles.sectionTitle}>Historial de cobros</Text>
+      <Text style={styles.sectionTitle}>Contratos Activos ({acuerdos.length})</Text>
+
+      {acuerdos.length === 0 ? (
+        <View style={styles.emptyHistorial}>
+          <Ionicons name="people-outline" size={32} color="#ccc" />
+          <Text style={styles.emptyHistorialTitle}>Sin contratos activos</Text>
+          <Text style={styles.emptyHistorialDesc}>
+            Las solicitudes que aceptes se listarán aquí como contratos activos.
+          </Text>
+        </View>
+      ) : (
+        acuerdos.map(acuerdo => {
+          const padreNombre = acuerdo.padre_id
+            ? `${acuerdo.padre_id.nombre} ${acuerdo.padre_id.apellido || ''}`
+            : 'Padre';
+          const hijosNombres = (acuerdo.solicitud_id?.hijos_ids || []).map(h => h.nombre).join(', ') || 'Sin especificar';
+          const totalCobro = acuerdo.tarifa_mensual + (acuerdo.membresia || 0);
+
+          return (
+            <View key={acuerdo._id} style={styles.contratoCard}>
+              <View style={styles.contratoHeader}>
+                <View>
+                  <Text style={styles.contratoLabel}>Padre / Representante</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#0D1B3E', marginTop: 2 }}>{padreNombre}</Text>
+                  <Text style={{ fontSize: 12, color: '#666', marginTop: 1 }}>{acuerdo.solicitud_id?.escuela}</Text>
+                </View>
+                <View style={styles.activoBadge}>
+                  <View style={styles.activoDot} />
+                  <Text style={styles.activoText}>Activo</Text>
+                </View>
+              </View>
+              
+              <View style={styles.desgloseDivider} />
+              
+              <View style={{ gap: 6, marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="person-outline" size={13} color="#666" />
+                  <Text style={{ fontSize: 12, color: '#555' }}>Estudiantes: <Text style={{ fontWeight: '600' }}>{hijosNombres}</Text></Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="wallet-outline" size={13} color="#666" />
+                  <Text style={{ fontSize: 12, color: '#555' }}>Tarifa neta: <Text style={{ fontWeight: '600' }}>${acuerdo.tarifa_mensual.toFixed(2)}/mes</Text></Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="card-outline" size={13} color="#666" />
+                  <Text style={{ fontSize: 12, color: '#555' }}>Cobro a tarjeta (c/ membresía): <Text style={{ fontWeight: '600', color: '#00AEEF' }}>${totalCobro.toFixed(2)}/mes</Text></Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.btnCancelarSub, cancelandoId === acuerdo._id && { opacity: 0.6 }]}
+                onPress={() => handleCancelarContrato(acuerdo)}
+                disabled={cancelandoId === acuerdo._id}
+                activeOpacity={0.85}
+              >
+                {cancelandoId === acuerdo._id ? (
+                  <ActivityIndicator size="small" color="#B91C1C" />
+                ) : (
+                  <>
+                    <Ionicons name="close-circle-outline" size={15} color="#B91C1C" />
+                    <Text style={styles.btnCancelarSubText}>Finalizar Contrato</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          );
+        })
+      )}
+
+      <Text style={[styles.sectionTitle, { marginTop: 14 }]}>Historial de cobros</Text>
 
       {pagos.length === 0 ? (
         <View style={styles.emptyHistorial}>
@@ -847,4 +1169,37 @@ const styles = StyleSheet.create({
   depositadoBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E6F9EE', borderRadius: 12, paddingVertical: 2, paddingHorizontal: 8 },
   depositadoDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#16A34A' },
   depositadoText: { fontSize: 11, color: '#16A34A', fontWeight: '700' },
+  formInput: {
+    backgroundColor: '#F5F8FC',
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#0D1B3E',
+    marginTop: 6,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0D1B3E',
+  },
+  dropdownSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F5F8FC',
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginTop: 6,
+  },
+  dropdownSelectorText: {
+    fontSize: 14,
+    color: '#0D1B3E',
+    fontWeight: '500',
+  },
 });

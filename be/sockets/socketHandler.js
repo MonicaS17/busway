@@ -1,6 +1,7 @@
 const Viaje = require('../models/Viaje');
 const Estudiante = require('../models/Estudiante');
 const Usuario = require('../models/Usuario');
+const Notificacion = require('../models/Notificacion');
 const { sendPushNotification } = require('../utils/notificaciones');
 
 // ─── NOTIFICACIÓN ─────────────────────────────────────────────────────────
@@ -11,6 +12,25 @@ async function notificarPadre(hijo_id, viaje_id, tipo_evento, titulo, mensaje) {
     if (!estudiante) return;
     const padre = await Usuario.findById(estudiante.padre_id);
     if (!padre) return;
+
+    // Buscar el viaje para obtener el conductor
+    const viaje = await Viaje.findById(viaje_id);
+    const conductor_id = viaje ? viaje.conductor_id : estudiante.conductor_id;
+
+    if (conductor_id) {
+      // Guardar la notificación en la base de datos para que aparezca en el panel de avisos
+      await Notificacion.create({
+        conductor_id: conductor_id,
+        tipo: 'individual',
+        mensaje: `${titulo} ${mensaje}`,
+        destinatarios: [padre._id],
+        hijos_ids: [hijo_id],
+        viaje_id: viaje_id,
+        audiencia: 'individual',
+        fecha: new Date(),
+      });
+    }
+
     // Si el padre tiene fcm_token, usar el primero, si no usar un mock para verificar el flujo
     const token = (padre.fcm_token && padre.fcm_token.length > 0) ? padre.fcm_token[0] : 'mock_fcm_token';
 
@@ -150,8 +170,8 @@ module.exports = (io) => {
         }
 
         if (viajeFinalizado.tipo_viaje === 'ida') {
-          // Notificar a todos los padres de los estudiantes que asistieron en el viaje de ida
-          const estudiantesAsistieron = [...new Set(viajeFinalizado.asistencias.map(a => String(a.hijo_id)))];
+          // Notificar solo a los padres de los estudiantes que realmente subieron al bus
+          const estudiantesAsistieron = viajeFinalizado.estudiantes_abordo || [];
           for (const estId of estudiantesAsistieron) {
             await notificarPadre(estId, viajeFinalizado._id, 'en_escuela', '🏫 ¡Llegada a la escuela!', 'Su hijo ha llegado a la escuela de manera segura.');
           }
@@ -163,6 +183,29 @@ module.exports = (io) => {
             tipo_viaje: 'ida'
           });
         } else {
+          // Si era de tipo 'vuelta', notificar a los estudiantes que seguían a bordo y registrar su bajada
+          const estudiantesAbordo = viajeFinalizado.estudiantes_abordo || [];
+          const ahora = new Date();
+          for (const estId of estudiantesAbordo) {
+            // Registrar asistencia de bajada en la BD para que quede consistente
+            await Viaje.findByIdAndUpdate(id_viaje, {
+              $push: {
+                asistencias: {
+                  hijo_id: estId,
+                  tipo: 'bajada',
+                  metodo_registro: 'manual',
+                  fecha_hora: ahora,
+                  latitud: null,
+                  longitud: null
+                }
+              }
+            });
+            // Notificar al padre
+            await notificarPadre(estId, viajeFinalizado._id, 'entregado_en_casa', '🏠 ¡Llegada exitosa!', 'Su hijo ha sido entregado de forma segura en casa.');
+          }
+          // Limpiar estudiantes_abordo
+          await Viaje.findByIdAndUpdate(id_viaje, { $set: { estudiantes_abordo: [] } });
+
           // Si era de tipo 'vuelta', la ruta diaria ha finalizado completamente.
           io.to(`sala:ruta:${id_ruta}`).emit('ruta:finalizada');
           io.in(`sala:ruta:${id_ruta}`).socketsLeave(`sala:ruta:${id_ruta}`);

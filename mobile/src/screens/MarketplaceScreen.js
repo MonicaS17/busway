@@ -11,15 +11,176 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../config/firebase';
 import api from '../config/api';
 
-const PROVINCIAS = ['Panamá', 'Panamá Oeste', 'Colón', 'Coclé', 'Veraguas', 'Herrera', 'Los Santos', 'Chiriquí', 'Bocas del Toro', 'Darién'];
+const PROVINCIAS = [
+  'Panamá', 'Panamá Oeste', 'Colón', 'Coclé', 'Veraguas',
+  'Herrera', 'Los Santos', 'Chiriquí', 'Bocas del Toro', 'Darién',
+  'Emberá-Wounaan', 'Guna Yala', 'Ngäbe-Buglé',
+];
+
 const DISTRITOS = {
-  'Panamá': ['Panamá', 'San Miguelito', 'Chepo', 'Taboga'],
-  'Panamá Oeste': ['Arraiján', 'La Chorrera', 'Capira', 'Chame', 'San Carlos'],
+  'Panamá':           ['Panamá', 'San Miguelito', 'Chepo', 'Balboa', 'Chimán', 'Taboga'],
+  'Panamá Oeste':     ['Arraiján', 'La Chorrera', 'Capira', 'Chame', 'San Carlos'],
+  'Colón':            ['Colón', 'Portobelo', 'Santa Isabel', 'Donoso', 'Chagres', 'Omar Torrijos Herrera'],
+  'Coclé':            ['Penonomé', 'Aguadulce', 'Natá', 'Olá', 'La Pintada', 'Antón'],
+  'Veraguas':         ['Santiago', 'Soná', 'Calobre', 'Cañazas', 'La Mesa', 'Atalaya', 'Montijo', 'Río de Jesús', 'Las Palmas', 'San Francisco', 'Santa Fe', 'Mariato'],
+  'Herrera':          ['Chitré', 'Ocú', 'Parita', 'Pesé', 'Santa María', 'Las Minas', 'Los Pozos'],
+  'Los Santos':       ['Las Tablas', 'Guararé', 'Los Santos', 'Macaracas', 'Pedasí', 'Pocrí', 'Tonosí', 'Villalba'],
+  'Chiriquí':         ['David', 'Boquete', 'Bugaba', 'Alanje', 'Barú', 'Boquerón', 'Dolega', 'Gualaca', 'Remedios', 'Renacimiento', 'San Félix', 'San Lorenzo', 'Tierras Altas', 'Tolé'],
+  'Bocas del Toro':   ['Bocas del Toro', 'Changuinola', 'Chiriquí Grande', 'Almirante'],
+  'Darién':           ['La Palma', 'Chepigana', 'Pinogana', 'Sambú'],
+  'Emberá-Wounaan':   ['Cémaco', 'Sambú'],
+  'Guna Yala':        ['Guna Yala'],
+  'Ngäbe-Buglé':      ['Besiko', 'Kankintú', 'Kusapín', 'Mironó', 'Müna', 'Ñürüm', 'Santa Catalina'],
 };
+
 const CORREGIMIENTOS = {
-  'Arraiján': ['Vista Alegre', 'Nuevo Arraiján', 'Burunga', 'Juan Demóstenes Arosemena', 'Veracruz'],
-  'La Chorrera': ['La Chorrera', 'Barrio Colón', 'El Arado', 'Herrera', 'Mendoza'],
-  'Panamá': ['Ancón', 'Bella Vista', 'Betania', 'Calidonia', 'Curundú', 'El Chorrillo', 'Parque Lefevre'],
+  // ── Panamá ──────────────────────────────────────────────────────────────
+  'Panamá': [
+    'Ancón', 'Bella Vista', 'Betania', 'Calidonia', 'Curundú',
+    'El Chorrillo', 'Juan Díaz', 'Las Mañanitas', 'Parque Lefevre',
+    'Pedregal', 'Pueblo Nuevo', 'Rio Abajo', 'San Felipe', 'San Francisco',
+    'Santa Ana', 'Tocumen',
+  ],
+  'San Miguelito': [
+    'Amelia Denis de Icaza', 'Belisario Frías', 'Belisario Porras',
+    'José Domingo Espinar', 'Mateo Iturralde', 'Rufina Alfaro',
+    'Victoriano Lorenzo',
+  ],
+  'Chepo':   ['Chepo', 'Cañita', 'Chepillo', 'El Llano', 'San Martín', 'Tortí'],
+  'Balboa':  ['Balboa', 'Arraiján (Balboa)', 'La Esmeralda', 'Nuevo Emperador', 'Saboga'],
+  'Chimán':  ['Chimán', 'Brujas', 'Gonzalo Vásquez', 'Ipetí', 'Majé', 'Unión Santeña'],
+  'Taboga':  ['Taboga', 'Otoque Occidente', 'Otoque Oriente'],
+
+  // ── Panamá Oeste ─────────────────────────────────────────────────────────
+  'Arraiján': [
+    'Vista Alegre', 'Nuevo Arraiján', 'Burunga',
+    'Juan Demóstenes Arosemena', 'Veracruz', 'Cerro Silvestre',
+    'Puerto Caimito',
+  ],
+  'La Chorrera': [
+    'La Chorrera', 'Barrio Colón', 'El Arado', 'Herrera', 'Mendoza',
+    'Guadalupe', 'Iglesitas', 'Iturralde', 'La Mitra', 'Obario',
+    'Playa Leona',
+  ],
+  'Capira': [
+    'Capira', 'Campana', 'Caimito', 'Cermeño', 'Cirí de Los Sotos',
+    'Cirí Grande', 'El Chaparro', 'La Trinidad', 'Lídice', 'Majagual',
+    'Villa Carmen',
+  ],
+  'Chame': [
+    'Chame', 'Bejuco', 'El Líbano', 'Nueva Gorgona', 'Punta Chame',
+  ],
+  'San Carlos': [
+    'San Carlos', 'El Espino', 'Hurtado', 'La Ermita', 'La Laguna',
+    'Las Uvas', 'Río Congo', 'Río Congo Arriba',
+  ],
+
+  // ── Colón ────────────────────────────────────────────────────────────────
+  'Colón': [
+    'Barrio Norte', 'Barrio Sur', 'Buena Vista', 'Cativá', 'Cristóbal',
+    'Escobal', 'Limón', 'Sabanitas', 'Salamanca',
+  ],
+  'Portobelo':              ['Portobelo', 'Garrote', 'Isla Grande', 'María Chiquita'],
+  'Santa Isabel':           ['Palmira', 'Cuipo', 'El Eneal', 'Nombre de Dios', 'Palenque', 'Viento Frío'],
+  'Donoso':                 ['Donoso', 'Coclé del Norte', 'El Guásimo', 'El Palmar', 'Río Indio'],
+  'Chagres':                ['Chagres', 'Achiote', 'Nuevo Chagres', 'Palmas Bellas', 'Salud'],
+  'Omar Torrijos Herrera':  ['Omar Torrijos Herrera', 'Ciricito', 'El Copé', 'Piedras Gordas', 'Río Indio'],
+
+  // ── Coclé ────────────────────────────────────────────────────────────────
+  'Penonomé': [
+    'Penonomé', 'Cañaveral', 'Chiguirí Arriba', 'Coclé', 'El Chirú',
+    'La Pintada', 'Pajonal', 'Río Grande', 'Toabré',
+  ],
+  'Aguadulce': ['Aguadulce', 'El Roble', 'Pocrí'],
+  'Natá':      ['Natá', 'Capellanía', 'El Caño', 'Olá'],
+  'Olá':       ['Olá', 'El Harino', 'Tulú'],
+  'La Pintada':['La Pintada', 'Anón', 'Caño Sucio', 'El Cope', 'Llano Grande', 'Llano Iguana'],
+  'Antón':     ['Antón', 'El Valle de Antón', 'Juan Díaz', 'Río Hato', 'San Juan de Dios'],
+
+  // ── Veraguas ─────────────────────────────────────────────────────────────
+  'Santiago': [
+    'Santiago', 'Carlos Santana Ávila', 'Edwin Fábrega', 'La Colorada',
+    'La Peña', 'La Raya de Santa María', 'Los Algarrobos', 'Ponuga',
+    'San Pedro del Espino',
+  ],
+  'Soná':         ['Soná', 'Cañazas', 'El Marañón', 'Gobea', 'Hicaco', 'Quebro', 'Río de Jesús'],
+  'Calobre':      ['Calobre', 'Chitra', 'El Bajo', 'La Laguna', 'Monjarás', 'San José'],
+  'Cañazas':      ['Cañazas', 'El Aromillo', 'El Piro', 'Los Valles', 'Ñurín', 'San Bartolo'],
+  'La Mesa':      ['La Mesa', 'Bisvalles', 'El Hato', 'El Potrero', 'Las Palmas', 'Urracá'],
+  'Atalaya':      ['Atalaya', 'Los Hatillos', 'Ponuga', 'San Antonio'],
+  'Montijo':      ['Montijo', 'Arenas', 'El Varal', 'Gobernadora', 'Leones', 'Pilón', 'Unión Chocó'],
+  'Río de Jesús': ['Río de Jesús', 'Capellanía', 'El Pavo', 'San Marcelo'],
+  'Las Palmas':   ['Las Palmas', 'Cerro de Casa', 'Corral Falso', 'Los Díaz', 'Pixvae', 'Puerto Vidal', 'Rodeo Viejo', 'San Martín de Porres', 'Viguí'],
+  'San Francisco':['San Francisco', 'Corozal', 'El Picador', 'La Garceana', 'La Yeguada', 'Los Milagros'],
+  'Santa Fe':     ['Santa Fe', 'Calovébora', 'El Alto', 'El Cuay', 'Gatuncito', 'Río Luis', 'Tute'],
+  'Mariato':      ['Mariato', 'Arenas', 'Cébaco', 'Jesús María', 'Los Asientos', 'Tebario'],
+
+  // ── Herrera ──────────────────────────────────────────────────────────────
+  'Chitré':      ['Chitré', 'Llano Bonito', 'La Arena', 'Monagrillo', 'San Juan Bautista'],
+  'Ocú':         ['Ocú', 'El Tijera', 'Llano de La Cruz', 'Llano Grande', 'Peñas Chatas'],
+  'Parita':      ['Parita', 'El Rincón', 'Los Cerritos', 'París', 'Portobelillo'],
+  'Pesé':        ['Pesé', 'Atalaya', 'La Cabima', 'La Garceana', 'Macaracas'],
+  'Santa María': ['Santa María', 'Cerro Largo', 'El Calabacito', 'El Toro', 'Los Canelos', 'Quebrada del Rosario'],
+  'Las Minas':   ['Las Minas', 'Cañas', 'El Ciruelo', 'El Pedregoso', 'Llano de Piedra'],
+  'Los Pozos':   ['Los Pozos', 'Agua Buena', 'El Capurí', 'El Cedro', 'Las Guías Arriba'],
+
+  // ── Los Santos ───────────────────────────────────────────────────────────
+  'Las Tablas': [
+    'Las Tablas', 'El Carate', 'El Cocal', 'El Manantial', 'Flores',
+    'La Enea', 'La Laja', 'La Palma', 'La Tiza', 'Llano Abajo',
+    'Los Asientos', 'Nuario', 'Palmira', 'Peña Blanca', 'Quebrada Seca',
+    'Santo Domingo', 'Ureña',
+  ],
+  'Guararé':   ['Guararé', 'El Ejido', 'La Espigadilla', 'La Palma de Guararé', 'Las Palmitas', 'Monagrillo', 'Puerto Mensabé', 'Sabanagrande'],
+  'Los Santos':['Los Santos', 'Llano Largo', 'Macaracas', 'Pedasí', 'Pocrí', 'Quia', 'Sabana Grande', 'Tonosí'],
+  'Macaracas': ['Macaracas', 'Bahía Honda', 'El Cedro', 'El Cocobolo', 'Lajamina', 'Mogollón', 'San José'],
+  'Pedasí':    ['Pedasí', 'Oria Arriba', 'Los Asientos'],
+  'Pocrí':     ['Pocrí', 'La Palma', 'Paritilla'],
+  'Tonosí':    ['Tonosí', 'Cañas', 'El Cortezo', 'El Muña', 'Los Asientos', 'Flores'],
+  'Villalba':  ['Villalba', 'La Colorada', 'La Laja', 'Las Cruces'],
+
+  // ── Chiriquí ─────────────────────────────────────────────────────────────
+  'David': [
+    'David', 'Burica', 'Las Lomas', 'Miraflores', 'Pedregal',
+    'San Carlos', 'San Pablo Nuevo Abajo', 'San Pablo Viejo Abajo',
+    'San Pablo Nuevo Arriba', 'San Pablo Viejo Arriba',
+  ],
+  'Boquete':      ['Boquete', 'Alto Boquete', 'Caldera', 'Cochea', 'Jaramillo', 'Los Naranjos', 'Palmira', 'Potrerillos'],
+  'Bugaba':       ['Bugaba', 'Alanje', 'Candela', 'Cerro Punta', 'Gualaca', 'Jaramillo', 'La Concepción', 'Los Anastacios', 'Potrerillos', 'Rovira'],
+  'Alanje':       ['Alanje', 'Cochea', 'Divalá', 'Guarumal', 'Los Anastacios', 'Paja de Sombrero', 'San Andrés'],
+  'Barú':         ['Puerto Armuelles', 'Limones', 'Rodolfo Aguilar Delgado'],
+  'Boquerón':     ['Boquerón', 'Chiriquí', 'La Estrella', 'Los Algarrobos', 'Palo Blanco', 'San Lorenzo'],
+  'Dolega':       ['Dolega', 'Dos Ríos', 'Los Algarrobos', 'Potrerillos Abajo', 'Potrerillos Arriba', 'Rovira'],
+  'Gualaca':      ['Gualaca', 'Chiriquí Grande', 'Dolega', 'Los Planes', 'Punta de Burica'],
+  'Remedios':     ['Remedios', 'Las Lajas', 'Membrillo', 'Paja de Sombrero', 'San Félix'],
+  'Renacimiento': ['Renacimiento', 'Cañas Gordas', 'Cerro Pelado', 'Guadalupe', 'Paso Canoa', 'Río Sereno'],
+  'San Félix':    ['San Félix', 'Agua de Salud', 'Katíos', 'Punta de Burica', 'Tolé'],
+  'San Lorenzo':  ['San Lorenzo', 'El Nancito', 'El Palmar', 'Horconcitos', 'San Lorenzo'],
+  'Tierras Altas':['Cerro Punta', 'Bambito', 'Guadalupe', 'Hartmann', 'Jaramillo Arriba', 'Jaramillo Abajo', 'Nueva Suiza', 'Volcán'],
+  'Tolé':         ['Tolé', 'Alto Caballero', 'Bella Vista', 'Cerro Viejo', 'Hato Culantro', 'Quebrada de Piedra'],
+
+  // ── Bocas del Toro ───────────────────────────────────────────────────────
+  'Bocas del Toro': ['Bocas del Toro', 'Bastimentos', 'Cauchero', 'Punta Laurel', 'Punta Manglares'],
+  'Changuinola':    ['Changuinola', 'Almirante', 'Guabito', 'Las Tablas', 'Miramar', 'Palo Seco', 'Silencio', 'Teribe'],
+  'Chiriquí Grande':['Chiriquí Grande', 'Bonyic', 'Miramar', 'Punta Peña', 'Rambala'],
+  'Almirante':      ['Almirante', 'Changuinola', 'Guabito'],
+
+  // ── Darién ───────────────────────────────────────────────────────────────
+  'La Palma':  ['La Palma', 'Agua Fría', 'Camogantí', 'Cucunatí', 'El Balsas', 'El Salto', 'Metetí', 'Río Congo', 'Tucutí'],
+  'Chepigana': ['La Palma', 'Garachiné', 'Jaqué', 'Metetí', 'Río Congo', 'Sambú', 'Taimatí', 'Tucutí', 'Vista Alegre'],
+  'Pinogana':  ['El Real de Santa María', 'Boca de Cupe', 'Chepigana', 'Lajas Blancas', 'Paya', 'Pucuro', 'Yaviza'],
+  'Sambú':     ['Sambú', 'La Chunga', 'Mogue', 'Río Balsa', 'Taimatí', 'Tucutí'],
+
+  // ── Comarcas ─────────────────────────────────────────────────────────────
+  'Emberá-Wounaan': ['Cémaco', 'Sambú'],
+  'Guna Yala':      ['Guna Yala'],
+  'Besiko':         ['Besiko'],
+  'Kankintú':       ['Kankintú'],
+  'Kusapín':        ['Kusapín'],
+  'Mironó':         ['Mironó'],
+  'Müna':           ['Müna'],
+  'Ñürüm':          ['Ñürüm'],
+  'Santa Catalina': ['Santa Catalina'],
 };
 
 
@@ -96,14 +257,16 @@ export default function MarketplaceScreen({ navigation, route }) {
     }
   };
 
-  const aceptarSolicitud = async (id) => {
+  const aceptarSolicitud = async (id, tarifa) => {
     try {
       const token = await auth.currentUser.getIdToken();
-      const res = await api.patch(`/api/solicitudes/${id}/aceptar`, {}, {
+      const res = await api.patch(`/api/solicitudes/${id}/aceptar`, {
+        tarifa_mensual: tarifa
+      }, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setSolicitudes(prev => prev.map(s =>
-        s._id === id ? { ...s, estado: 'aceptada' } : s
+        s._id === id ? { ...s, estado: 'aceptada', tarifa_mensual: tarifa } : s
       ));
       Alert.alert('Solicitud aceptada', 'El contrato ha sido creado exitosamente.');
     } catch (error) {
@@ -141,47 +304,51 @@ export default function MarketplaceScreen({ navigation, route }) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#0D1B3E" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.headerSub}>BusWay</Text>
-            <Text style={styles.headerTitle}>Marketplace</Text>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+              <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+            <View>
+              <Text style={styles.headerSub}>BusWay</Text>
+              <Text style={styles.headerTitle}>Marketplace</Text>
+            </View>
+            <View style={{ width: 40 }} />
           </View>
-          <View style={{ width: 40 }} />
         </View>
-      </View>
 
-      {/* Card blanca */}
-      <View style={styles.card}>
-        {esPadre ? (
-          <MarketplacePadre
-            ubicacion={ubicacionGuardada}
-            onGuardarUbicacion={(u) => setUbicacionGuardada(normalizarUbicacion(u))}
-            usuario={usuario}
-            conductores={conductores}
-            hijos={hijos}
-            solicitudes={solicitudes}
-            onAgregarSolicitud={agregarSolicitud}
-            onRecargarConductores={cargarDatos}
-          />
-        ) : (
-          <MarketplaceConductor
-            navigation={navigation}
-            usuario={usuario}
-            rutas={rutas}
-            solicitudes={solicitudes}
-            onAceptarSolicitud={aceptarSolicitud}
-            onRechazarSolicitud={rechazarSolicitud}
-          />
-        )}
-      </View>
-
+        {/* Card blanca */}
+        <View style={styles.card}>
+          {esPadre ? (
+            <MarketplacePadre
+              ubicacion={ubicacionGuardada}
+              onGuardarUbicacion={(u) => setUbicacionGuardada(normalizarUbicacion(u))}
+              usuario={usuario}
+              conductores={conductores}
+              hijos={hijos}
+              solicitudes={solicitudes}
+              onAgregarSolicitud={agregarSolicitud}
+              onRecargarConductores={cargarDatos}
+            />
+          ) : (
+            <MarketplaceConductor
+              navigation={navigation}
+              usuario={usuario}
+              rutas={rutas}
+              solicitudes={solicitudes}
+              onAceptarSolicitud={aceptarSolicitud}
+              onRechazarSolicitud={rechazarSolicitud}
+            />
+          )}
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
-
   );
 }
 
@@ -227,15 +394,46 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores,
         usuario={usuario}
         hijos={hijos}
         ubicacion={ubicacion}
-        onEnviar={(hijo, escuela) => {
-          onAgregarSolicitud(conductorSeleccionado, hijo, escuela);
-          setConductorSeleccionado(null);
-          setTabActivo('enviadas');
+        onEnviar={async (hijo, escuela) => {
+          const exito = await onAgregarSolicitud(conductorSeleccionado, hijo, escuela);
+          if (exito) {
+            setConductorSeleccionado(null);
+            setTabActivo('enviadas');
+            return true;
+          }
+          return false;
         }}
         onCancelar={() => setConductorSeleccionado(null)}
       />
     );
   }
+
+  const estaEnZona = (conductor, ubic) => {
+    if (!ubic) return false;
+    const normalizarTexto = (texto) => {
+      if (!texto) return '';
+      return texto
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+    };
+    
+    const parentCorregimiento = normalizarTexto(ubic.corregimiento);
+    const parentDistrito = normalizarTexto(ubic.distrito);
+    
+    return conductor.zonas.some(z => {
+      const zonaNorm = normalizarTexto(z);
+      return (
+        zonaNorm === parentCorregimiento || 
+        zonaNorm === parentDistrito ||
+        parentCorregimiento.includes(zonaNorm) ||
+        zonaNorm.includes(parentCorregimiento) ||
+        parentDistrito.includes(zonaNorm) ||
+        zonaNorm.includes(parentDistrito)
+      );
+    });
+  };
 
   const conductoresFiltrados = conductoresMapeados.filter(c =>
     busqueda === '' ||
@@ -243,6 +441,9 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores,
     c.escuelas.some(e => e.toLowerCase().includes(busqueda.toLowerCase())) ||
     c.zonas.some(z => z.toLowerCase().includes(busqueda.toLowerCase()))
   );
+
+  const conductoresEnZona = conductoresFiltrados.filter(c => estaEnZona(c, ubicacion));
+  const conductoresFueraDeZona = conductoresFiltrados.filter(c => !estaEnZona(c, ubicacion));
 
   return (
     <View style={{ flex: 1 }}>
@@ -305,23 +506,54 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores,
             )}
           </View>
 
-          <Text style={styles.sectionTitle}>Conductores disponibles</Text>
-          <Text style={styles.sectionSub}>{conductoresFiltrados.length} conductores cerca de tu zona</Text>
-
-          {conductoresFiltrados.map(conductor => (
-            <CardConductor
-              key={conductor._id}
-              conductor={conductor}
-              onSolicitar={() => setConductorSeleccionado(conductor)}
-            />
-          ))}
-
-          {conductoresFiltrados.length === 0 && (
+          {conductoresFiltrados.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="bus-outline" size={40} color="#ccc" />
               <Text style={styles.emptyTitle}>Sin resultados</Text>
               <Text style={styles.emptyDesc}>Intenta con otra escuela o zona.</Text>
             </View>
+          ) : (
+            <>
+              {/* Conductores en tu zona */}
+              {conductoresEnZona.length > 0 ? (
+                <>
+                  <Text style={styles.sectionTitle}>Conductores en tu zona</Text>
+                  <Text style={styles.sectionSub}>{conductoresEnZona.length} conductor{conductoresEnZona.length !== 1 ? 'es' : ''} cerca de tu ubicación</Text>
+                  {conductoresEnZona.map(conductor => (
+                    <CardConductor
+                      key={conductor._id}
+                      conductor={conductor}
+                      onSolicitar={() => setConductorSeleccionado(conductor)}
+                    />
+                  ))}
+                </>
+              ) : (
+                <View style={styles.noConductoresZonaBox}>
+                  <Ionicons name="alert-circle-outline" size={22} color="#D97706" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.noConductoresZonaTitle}>No hay conductores en tu zona</Text>
+                    <Text style={styles.noConductoresZonaDesc}>
+                      No encontramos conductores en {ubicacion?.corregimiento || ubicacion?.distrito}. A continuación se muestran opciones en otras áreas:
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Conductores fuera de tu zona */}
+              {conductoresFueraDeZona.length > 0 && (
+                <>
+                  <Text style={[styles.sectionTitle, { marginTop: conductoresEnZona.length > 0 ? 24 : 10 }]}>Conductores fuera de tu zona</Text>
+                  <Text style={styles.sectionSub}>{conductoresFueraDeZona.length} conductor{conductoresFueraDeZona.length !== 1 ? 'es' : ''} disponible{conductoresFueraDeZona.length !== 1 ? 's' : ''} en otras áreas</Text>
+                  {conductoresFueraDeZona.map(conductor => (
+                    <CardConductor
+                      key={conductor._id}
+                      conductor={conductor}
+                      onSolicitar={() => setConductorSeleccionado(conductor)}
+                    />
+                  ))}
+                </>
+              )}
+            </>
           )}
         </ScrollView>
       ) : (
@@ -334,34 +566,50 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores,
 // ─── Pantalla de solicitud ────────────────────────────────────────────────────
 function PantallaSolicitud({ conductor, usuario, hijos, ubicacion, onEnviar, onCancelar }) {
   const [hijoSeleccionado, setHijoSeleccionado] = useState(null);
+  const [enviando, setEnviando] = useState(false);
 
   const hijoObj = hijos.find(h => h._id === hijoSeleccionado);
-  const puedeEnviar = hijoSeleccionado !== null;
+  const puedeEnviar = hijoSeleccionado !== null && !enviando;
 
   const handleWhatsApp = async () => {
     if (!puedeEnviar) return;
+    setEnviando(true);
 
-    const escuela = conductor.escuelas[0];
-    const mensaje =
-      `Hola ${conductor.nombre}, soy *${usuario.nombre} ${usuario.apellido}*, ` +
-      `padre/madre de *${hijoObj.nombre}* quien asiste a *${escuela}*. ` +
-      `Vi tu perfil en BusWay y me interesa contratar tu servicio de transporte escolar (tarifa $${conductor.tarifa}/mes). ` +
-      `¿Tienes disponibilidad en tu ruta para mi hijo/a? ¡Quedo pendiente, gracias!`;
+    try {
+      const escuela = conductor.escuelas[0];
+      
+      const exito = await onEnviar(hijoObj, escuela);
+      
+      if (exito) {
+        const mensaje =
+          `Hola, buenas. Estoy interesado/a en su servicio de transporte escolar a través de BusWay. ` +
+          `Mi nombre es *${usuario.nombre} ${usuario.apellido}* y me gustaría consultar la disponibilidad de ruta para mi hijo/a *${hijoObj.nombre}* hacia la escuela *${escuela}*. ` +
+          `Quedo atento/a para coordinar los detalles. ¡Muchas gracias!`;
 
-    const url = `https://wa.me/${conductor.telefono}?text=${encodeURIComponent(mensaje)}`;
+        const url = `https://wa.me/50766032950?text=${encodeURIComponent(mensaje)}`;
 
-    const soportado = await Linking.canOpenURL(url);
-    if (soportado) {
-      await Linking.openURL(url);
-      onEnviar(hijoObj, escuela);
-    } else {
-      Alert.alert('Error', 'No se pudo abrir WhatsApp. Verifica que esté instalado.');
+        const soportado = await Linking.canOpenURL(url);
+        if (soportado) {
+          await Linking.openURL(url);
+        } else {
+          Alert.alert('Error', 'No se pudo abrir WhatsApp. Verifica que esté instalado.');
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Ocurrió un error al enviar la solicitud.');
+    } finally {
+      setEnviando(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+    <View style={{ flex: 1 }}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.body} 
+        showsVerticalScrollIndicator={false}
+      >
         <TouchableOpacity onPress={onCancelar} style={styles.btnBack}>
           <Ionicons name="arrow-back-outline" size={18} color="#0D1B3E" />
           <Text style={styles.btnBackText}>Volver al catálogo</Text>
@@ -477,18 +725,26 @@ function PantallaSolicitud({ conductor, usuario, hijos, ubicacion, onEnviar, onC
           style={[styles.btnWhatsapp, !puedeEnviar && styles.btnDisabled]}
           onPress={handleWhatsApp}
           activeOpacity={puedeEnviar ? 0.85 : 1}
+          disabled={!puedeEnviar}
         >
-          <Ionicons name="logo-whatsapp" size={20} color={puedeEnviar ? '#fff' : '#aaa'} />
-          <Text style={[styles.btnWhatsappText, !puedeEnviar && styles.btnWhatsappTextDisabled]}>
-            Enviar Solicitud
-          </Text>
+          {enviando ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="logo-whatsapp" size={20} color={puedeEnviar ? '#fff' : '#aaa'} />
+              <Text style={[styles.btnWhatsappText, !puedeEnviar && styles.btnWhatsappTextDisabled]}>
+                Enviar Solicitud
+              </Text>
+            </>
+          )}
         </TouchableOpacity>
 
         {!puedeEnviar && hijos.length > 0 && (
           <Text style={styles.hintText}>Selecciona un hijo para continuar</Text>
         )}
+        <View style={{ height: 40 }} />
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -512,7 +768,7 @@ function ListaSolicitudesEnviadas({ solicitudes }) {
       <Text style={styles.sectionSub}>{solicitudes.length} solicitud{solicitudes.length !== 1 ? 'es' : ''} enviada{solicitudes.length !== 1 ? 's' : ''}</Text>
 
       {solicitudes.map(sol => (
-        <CardSolicitudPadre key={sol.id} solicitud={sol} />
+        <CardSolicitudPadre key={sol._id} solicitud={sol} />
       ))}
     </ScrollView>
   );
@@ -564,6 +820,33 @@ function MarketplaceConductor({ navigation, usuario, rutas, solicitudes, onAcept
   const [tabActivo, setTabActivo] = useState('rutas');
   const [rutaDetalle, setRutaDetalle] = useState(null);
 
+  const [modalAceptarVisible, setModalAceptarVisible] = useState(false);
+  const [solicitudSeleccionada, setSolicitudSeleccionada] = useState(null);
+  const [tarifaAceptar, setTarifaAceptar] = useState('');
+  const [guardandoTarifa, setGuardandoTarifa] = useState(false);
+
+  const iniciarAceptar = (sol) => {
+    setSolicitudSeleccionada(sol);
+    setTarifaAceptar(sol.tarifa_mensual ? sol.tarifa_mensual.toString() : '');
+    setModalAceptarVisible(true);
+  };
+
+  const ejecutarAceptar = async () => {
+    if (!tarifaAceptar.trim() || isNaN(tarifaAceptar) || parseFloat(tarifaAceptar) < 0) {
+      Alert.alert('Tarifa inválida', 'Por favor ingresa una tarifa mensual válida.');
+      return;
+    }
+    setGuardandoTarifa(true);
+    try {
+      await onAceptarSolicitud(solicitudSeleccionada._id, parseFloat(tarifaAceptar));
+      setModalAceptarVisible(false);
+    } catch (err) {
+      console.log('Error accepting solicitud:', err);
+    } finally {
+      setGuardandoTarifa(false);
+    }
+  };
+
   const rutasMapeadas = rutas.map(r => ({
     _id: r._id,
     escuela: r.escuela,
@@ -574,18 +857,18 @@ function MarketplaceConductor({ navigation, usuario, rutas, solicitudes, onAcept
   }));
 
   if (rutaDetalle) {
-  return (
-    <DetalleRutaConductor 
-      ruta={rutaDetalle} 
-      onVolver={() => setRutaDetalle(null)}
-      navigation={navigation}
-      usuario={usuario}
-    />
-  );
-}
+    return (
+      <DetalleRutaConductor 
+        ruta={rutaDetalle} 
+        onVolver={() => setRutaDetalle(null)}
+        navigation={navigation}
+        usuario={usuario}
+      />
+    );
+  }
 
   if (rutas.length === 0) {
-    return <PantallaConfigRuta onIrARutas={() => navigation.navigate('Rutas', { usuario })} />;
+    return <PantallaConfigRuta onIrARutas={() => navigation.navigate('Ruta', { usuario })} />;
   }
 
   return (
@@ -625,7 +908,7 @@ function MarketplaceConductor({ navigation, usuario, rutas, solicitudes, onAcept
                 {rutas.length} ruta{rutas.length !== 1 ? 's' : ''} activa{rutas.length !== 1 ? 's' : ''}
               </Text>
             </View>
-            <TouchableOpacity style={styles.btnNuevaRuta} onPress={() => navigation.navigate('Rutas', { usuario })}>
+            <TouchableOpacity style={styles.btnNuevaRuta} onPress={() => navigation.navigate('Ruta', { usuario })}>
               <Ionicons name="add-outline" size={18} color="#0D1B3E" />
               <Text style={styles.btnNuevaRutaText}>Nueva ruta</Text>
             </TouchableOpacity>
@@ -640,10 +923,71 @@ function MarketplaceConductor({ navigation, usuario, rutas, solicitudes, onAcept
       ) : (
         <ListaSolicitudesRecibidas
           solicitudes={solicitudes}
-          onAceptar={onAceptarSolicitud}
+          onAceptar={iniciarAceptar}
           onRechazar={onRechazarSolicitud}
         />
       )}
+
+      {/* Modal para ingresar/confirmar Tarifa al Aceptar */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalAceptarVisible}
+        onRequestClose={() => setModalAceptarVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Aceptar Solicitud</Text>
+              
+              {solicitudSeleccionada && (
+                <Text style={styles.modalSub}>
+                  Establece o ajusta la tarifa mensual para la solicitud de{' '}
+                  <Text style={{ fontWeight: '700' }}>
+                    {solicitudSeleccionada.padre_id?.nombre} {solicitudSeleccionada.padre_id?.apellido || ''}
+                  </Text>
+                  :
+                </Text>
+              )}
+
+              <Text style={styles.sectionTitle}>Tarifa mensual ($)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Ej. 75"
+                placeholderTextColor="#aaa"
+                value={tarifaAceptar}
+                onChangeText={setTarifaAceptar}
+                keyboardType="numeric"
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.btnModalCancelar}
+                  onPress={() => setModalAceptarVisible(false)}
+                  disabled={guardandoTarifa}
+                >
+                  <Text style={styles.btnModalCancelarText}>Cancelar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.btnModalGuardar}
+                  onPress={ejecutarAceptar}
+                  disabled={guardandoTarifa}
+                >
+                  {guardandoTarifa ? (
+                    <ActivityIndicator size="small" color="#0D1B3E" />
+                  ) : (
+                    <Text style={styles.btnModalGuardarText}>Aceptar y Contratar</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -768,58 +1112,58 @@ function DetalleRutaConductor({ ruta, onVolver, navigation, usuario }) {
               </TouchableOpacity>
             </View>
 
-        {/* Filas de Estudiantes */}
-        {estudiantes.map((est, index) => (
-          <View key={est.id} style={[styles.filaEstudianteContainer, editando && { borderColor: '#FFD700', backgroundColor: '#FFFFFA' }]}>
-            
-            {/* Control Numérico Directo */}
-            <View style={styles.colCajaOrden}>
-              <TextInput
-                style={[styles.inputOrdenNumerico, editando && styles.inputOrdenNumericoActivo]}
-                value={est.inputPos}
-                keyboardType="numeric"
-                editable={editando}
-                onChangeText={(text) => cambiarPosicionPorInput(index, text)}
-              />
-            </View>
+            {/* Filas de Estudiantes */}
+            {estudiantes.map((est, index) => (
+              <View key={est.id} style={[styles.filaEstudianteContainer, editando && { borderColor: '#FFD700', backgroundColor: '#FFFFFA' }]}>
+                
+                {/* Control Numérico Directo */}
+                <View style={styles.colCajaOrden}>
+                  <TextInput
+                    style={[styles.inputOrdenNumerico, editando && styles.inputOrdenNumericoActivo]}
+                    value={est.inputPos}
+                    keyboardType="numeric"
+                    editable={editando}
+                    onChangeText={(text) => cambiarPosicionPorInput(index, text)}
+                  />
+                </View>
 
-            {/* Información Personal */}
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.nombreEstudianteFila}>{est.nombre}</Text>
-              <Text style={styles.subtextEstudianteFila}>Parada: {est.zona}</Text>
-            </View>
+                {/* Información Personal */}
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.nombreEstudianteFila}>{est.nombre}</Text>
+                  <Text style={styles.subtextEstudianteFila}>Parada: {est.zona}</Text>
+                </View>
 
-            {/* Botones de Flechas (Visibles únicamente en Modo Edición) */}
-            {editando && (
-              <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                <TouchableOpacity 
-                  disabled={index === 0} 
-                  style={index === 0 && { opacity: 0.25 }}
-                  onPress={() => moverEstudiante(index, 'ARRIBA')}
-                >
-                  <Ionicons name="arrow-up-circle-outline" size={26} color="#00AEEF" />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  disabled={index === estudiantes.length - 1} 
-                  style={index === estudiantes.length - 1 && { opacity: 0.25 }}
-                  onPress={() => moverEstudiante(index, 'ABAJO')}
-                >
-                  <Ionicons name="arrow-down-circle-outline" size={26} color="#00AEEF" />
-                </TouchableOpacity>
+                {/* Botones de Flechas (Visibles únicamente en Modo Edición) */}
+                {editando && (
+                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                    <TouchableOpacity 
+                      disabled={index === 0} 
+                      style={index === 0 && { opacity: 0.25 }}
+                      onPress={() => moverEstudiante(index, 'ARRIBA')}
+                    >
+                      <Ionicons name="arrow-up-circle-outline" size={26} color="#00AEEF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      disabled={index === estudiantes.length - 1} 
+                      style={index === estudiantes.length - 1 && { opacity: 0.25 }}
+                      onPress={() => moverEstudiante(index, 'ABAJO')}
+                    >
+                      <Ionicons name="arrow-down-circle-outline" size={26} color="#00AEEF" />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
-        ))}
+            ))}
 
-        {/* Botón de Acción Principal para Iniciar el Viaje */}
-        <TouchableOpacity 
-          style={styles.btnIniciarViajeAccion} 
-          onPress={() => navigation.navigate('Viaje', { usuario })}
-        >
-          <Ionicons name="play" size={16} color="#0D1B3E" />
-          <Text style={styles.btnIniciarViajeAccionText}>Iniciar Ruta en Tiempo Real</Text>
-        </TouchableOpacity>
-        </>
+            {/* Botón de Acción Principal para Iniciar el Viaje */}
+            <TouchableOpacity 
+              style={styles.btnIniciarViajeAccion} 
+              onPress={() => navigation.navigate('Viaje', { usuario })}
+            >
+              <Ionicons name="play" size={16} color="#0D1B3E" />
+              <Text style={styles.btnIniciarViajeAccionText}>Iniciar Ruta en Tiempo Real</Text>
+            </TouchableOpacity>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -848,7 +1192,7 @@ function ListaSolicitudesRecibidas({ solicitudes, onAceptar, onRechazar }) {
         <CardSolicitudConductor
           key={sol._id}
           solicitud={sol}
-          onAceptar={() => onAceptar(sol._id)}
+          onAceptar={() => onAceptar(sol)}
           onRechazar={() => onRechazar(sol._id)}
         />
       ))}
@@ -920,7 +1264,7 @@ function CardSolicitudConductor({ solicitud, onAceptar, onRechazar }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.btnAceptar}
-            onPress={() => confirmarAccion('aceptar', onAceptar)}
+            onPress={onAceptar}
             activeOpacity={0.85}
           >
             <Ionicons name="checkmark-outline" size={16} color="#0D1B3E" />
@@ -1040,7 +1384,7 @@ function FormularioUbicacion({ ubicacionInicial = null, onGuardar, onCancelar })
   );
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={onCancelar} style={styles.btnBack}>
           <Ionicons name="arrow-back-outline" size={18} color="#0D1B3E" />
@@ -1124,12 +1468,11 @@ function FormularioUbicacion({ ubicacionInicial = null, onGuardar, onCancelar })
           )}
           <Text style={styles.btnPrimaryText}>{guardando ? 'Guardando...' : 'Guardar dirección'}</Text>
         </TouchableOpacity>
+        <View style={{ height: 40 }} />
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
-
-// ─── Formulario de ruta (conductor) — Eliminado, se redirige a la pantalla Rutas ──
 
 // ─── Card de conductor ────────────────────────────────────────────────────────
 function CardConductor({ conductor, onSolicitar }) {
@@ -1226,36 +1569,6 @@ function CardRuta({ ruta }) {
     </View>
   );
 }
-
-// ─── Tab bar ──────────────────────────────────────────────────────────────────
-/*
-function TabBar({ insets, onLogout }) {
-  const tabs = [
-    { icon: 'home-outline', label: 'Inicio' },
-    { icon: 'map-outline', label: 'Viaje', active: true },
-    { icon: 'notifications-outline', label: 'Avisos' },
-    { icon: 'log-out-outline', label: 'Salir', onPress: onLogout, isLogout: true },
-  ];
-  return (
-    <View style={[styles.tabBar, { paddingBottom: insets.bottom + 10 }]}>
-      {tabs.map((tab, i) => (
-        <Pressable key={i} style={styles.tab} onPress={tab.onPress}>
-          {({ pressed }) => (
-            <>
-              <View style={tab.active || (tab.isLogout && pressed) ? styles.tabIconWrapActive : styles.tabIconWrap}>
-                <Ionicons name={tab.icon} size={20} color={tab.active || (tab.isLogout && pressed) ? '#0D1B3E' : '#aaa'} />
-              </View>
-              <Text style={tab.active || (tab.isLogout && pressed) ? styles.tabLabelActive : styles.tabLabel}>
-                {tab.label}
-              </Text>
-            </>
-          )}
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-*/
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -1518,4 +1831,93 @@ const styles = StyleSheet.create({
   subtextEstudianteFila: { fontSize: 12, color: '#666', marginTop: 2 },
   btnIniciarViajeAccion: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FFD700', borderRadius: 12, paddingVertical: 14, marginTop: 20 },
   btnIniciarViajeAccionText: { fontSize: 15, fontWeight: '700', color: '#0D1B3E' },
+
+  noConductoresZonaBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    marginBottom: 20,
+  },
+  noConductoresZonaTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#B45309',
+    marginBottom: 4,
+  },
+  noConductoresZonaDesc: {
+    fontSize: 12,
+    color: '#D97706',
+    lineHeight: 18,
+  },
+  modalInput: {
+    backgroundColor: '#F5F8FC',
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#0D1B3E',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0D1B3E',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalSub: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+  },
+  btnModalCancelar: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnModalCancelarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#8A94A6',
+  },
+  btnModalGuardar: {
+    flex: 1,
+    backgroundColor: '#FFD700',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnModalGuardarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0D1B3E',
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
+  },
 });

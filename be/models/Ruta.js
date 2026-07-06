@@ -31,4 +31,10 @@ const RutaSchema = new mongoose.Schema({
 });
 
 // Exportación segura para evitar errores de recompilación en Mongoose
-module.exports = mongoose.models.rutas || mongoose.model('rutas', RutaSchema);
+const Ruta = mongoose.models.Ruta || mongoose.model('Ruta', RutaSchema);
+
+if (!mongoose.models.rutas) {
+  mongoose.model('rutas', RutaSchema);
+}
+
+module.exports = Ruta;

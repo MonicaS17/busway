@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -200,7 +200,28 @@ function ViajeActivoPadre({
             <Text style={styles.conductorNombre}>{getSafeText(conductorInfo?.nombre, 'Conductor')}</Text>
             <Text style={styles.conductorSub}>{getSafeText(conductorInfo?.datos_conductor?.vehiculo, 'Vehículo')} · {getSafeText(conductorInfo?.datos_conductor?.placa, 'Placa')}</Text>
           </View>
-          <TouchableOpacity style={styles.btnWA} onPress={() => Alert.alert('WhatsApp', `Contactar a ${getSafeText(conductorInfo?.nombre, 'el conductor')}`)}>
+          <TouchableOpacity style={styles.btnWA} onPress={async () => {
+            const telefono = conductorInfo?.telefono || conductorInfo?.datos_conductor?.telefono;
+            if (!telefono) {
+              Alert.alert('Error', 'El conductor no tiene un número de teléfono registrado.');
+              return;
+            }
+            const num = telefono.replace(/[^0-9]/g, '');
+            const fullNum = num.startsWith('507') ? num : `507${num}`;
+            const mensaje = `Hola, buenas. Quería consultarle sobre el viaje de BusWay.`;
+            const url = `https://wa.me/${fullNum}?text=${encodeURIComponent(mensaje)}`;
+            try {
+              const soportado = await Linking.canOpenURL(url);
+              if (soportado) {
+                await Linking.openURL(url);
+              } else {
+                Alert.alert('Error', 'No se pudo abrir WhatsApp. Verifica que esté instalado.');
+              }
+            } catch (err) {
+              console.log('Error opening whatsapp link:', err);
+              Alert.alert('Error', 'No se pudo abrir WhatsApp.');
+            }
+          }}>
             <Ionicons name="logo-whatsapp" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
