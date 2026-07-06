@@ -28,7 +28,7 @@ router.post('/', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Solo los padres pueden enviar solicitudes' });
     }
 
-    const { conductor_id, hijos_ids, tarifa_mensual, escuela } = req.body;
+    const { conductor_id, hijos_ids, tarifa_mensual, escuela, ruta_id } = req.body;
     if (!conductor_id || !hijos_ids || !hijos_ids.length || tarifa_mensual === undefined || tarifa_mensual === null || !escuela) {
       return res.status(400).json({
         error: 'Faltan datos requeridos: conductor_id, hijos_ids, tarifa_mensual, escuela',
@@ -48,6 +48,7 @@ router.post('/', verifyToken, async (req, res) => {
     const solicitud = await Solicitud.create({
       padre_id: padre._id,
       conductor_id,
+      ruta_id,
       hijos_ids,
       tarifa_mensual,
       escuela,
@@ -136,9 +137,15 @@ router.patch('/:id/aceptar', verifyToken, async (req, res) => {
     solicitud.tarifa_mensual = tarifaFinal;
     await solicitud.save();
 
-    // Buscar la ruta del conductor que coincida con la escuela de la solicitud (o fallback a la primera que tenga)
+    // Buscar la ruta del conductor (usando el ruta_id seleccionado en la solicitud si existe, de lo contrario por escuela/defecto)
     const Ruta = require('../models/Ruta');
-    let rutaConductor = await Ruta.findOne({ conductor_id: conductor._id, escuela: solicitud.escuela });
+    let rutaConductor = null;
+    if (solicitud.ruta_id) {
+      rutaConductor = await Ruta.findById(solicitud.ruta_id);
+    }
+    if (!rutaConductor) {
+      rutaConductor = await Ruta.findOne({ conductor_id: conductor._id, escuela: solicitud.escuela });
+    }
     if (!rutaConductor) {
       rutaConductor = await Ruta.findOne({ conductor_id: conductor._id });
     }
@@ -156,6 +163,14 @@ router.patch('/:id/aceptar', verifyToken, async (req, res) => {
     const membresia = MEMBRESIA_DEFAULT;
     const total_mensual = tarifaFinal + membresia;
 
+    // Calcular meses totales de marzo a diciembre
+    const now = new Date();
+    const currentMonth = now.getMonth(); // 0 = Enero, 11 = Diciembre
+    let totalMeses = 10;
+    if (currentMonth >= 2) { // Si es Marzo o posterior
+      totalMeses = 11 - currentMonth + 1; // Meses restantes hasta diciembre inclusive
+    }
+
     const acuerdo = await Acuerdo.create({
       solicitud_id: solicitud._id,
       padre_id: solicitud.padre_id,
@@ -164,7 +179,7 @@ router.patch('/:id/aceptar', verifyToken, async (req, res) => {
       membresia,
       total_mensual,
       mes_actual: 1,
-      total_meses: TOTAL_MESES_DEFAULT,
+      total_meses: totalMeses,
       estado: 'activo',
       fecha_inicio: new Date(),
     });

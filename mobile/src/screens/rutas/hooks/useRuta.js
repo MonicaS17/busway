@@ -13,6 +13,9 @@ export default function useRuta({ usuario, esPadre }) {
   const [faseViaje, setFaseViaje] = useState('sin_viaje');
   const [token, setToken] = useState(null);               
 
+  const [rutas, setRutas] = useState([]);
+  const [rutaSeleccionadaId, setRutaSeleccionadaId] = useState(null);
+
   useEffect(() => {
     if (!usuario) return;
 
@@ -107,7 +110,10 @@ export default function useRuta({ usuario, esPadre }) {
 
         } else {
           // ─── LOGICA DE CONDUCTOR ─────────────────────────────────────────────────────────
-          const resRuta = await api.get('/api/conductor/ruta', {
+          const url = rutaSeleccionadaId
+            ? `/api/conductor/ruta?id_ruta=${rutaSeleccionadaId}`
+            : '/api/conductor/ruta';
+          const resRuta = await api.get(url, {
             headers: { Authorization: `Bearer ${idToken}` }
           });
 
@@ -119,6 +125,7 @@ export default function useRuta({ usuario, esPadre }) {
 
           const r = resRuta.data.ruta;
           setRutaInfo(r);
+          setRutas(resRuta.data.rutas || []);
 
           let estudiantesList = [];
           if (resRuta.data && resRuta.data.estudiantes && resRuta.data.estudiantes.length > 0) {
@@ -171,13 +178,17 @@ export default function useRuta({ usuario, esPadre }) {
     };
 
     loadData();
-  }, [usuario, esPadre]);
+  }, [usuario, esPadre, rutaSeleccionadaId]);
 
 
   return {
     loading,
     error,
     rutaInfo,
+    setRutaInfo,
+    rutas,
+    rutaSeleccionadaId,
+    setRutaSeleccionadaId,
     estudiantes,
     hijos,
     conductorInfo,

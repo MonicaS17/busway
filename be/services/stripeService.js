@@ -186,7 +186,8 @@ async function procesarEventoWebhook(event) {
         fecha: new Date(),
       });
 
-      acuerdo.mes_actual += 1;
+      const totalPagos = await Pago.countDocuments({ acuerdo_id: acuerdo._id, estado: 'Exitoso' });
+      acuerdo.mes_actual = totalPagos;
       if (acuerdo.mes_actual > acuerdo.total_meses) {
         acuerdo.estado = 'finalizado';
       }

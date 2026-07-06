@@ -86,15 +86,19 @@ router.get('/rutas', verifyToken, async (req, res) => {
     const usuario = await conductorAutenticado(req, res);
     if (!usuario) return;
     const rutas = await Ruta.find({ conductor_id: usuario._id });
-    const rutasMapped = rutas.map(r => {
+    
+    const Estudiante = require('../models/Estudiante');
+    const rutasMapped = [];
+    for (const r of rutas) {
       const doc = r.toObject();
+      doc.totalEstudiantes = await Estudiante.countDocuments({ conductor_id: usuario._id, ruta_id: r._id });
       if (doc.horario_salida && doc.horario_llegada) {
         doc.horario = `${doc.horario_salida} — ${doc.horario_llegada}`;
       } else {
         doc.horario = doc.horario || '6:30 AM — 7:15 AM';
       }
-      return doc;
-    });
+      rutasMapped.push(doc);
+    }
     res.json({ rutas: rutasMapped });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -121,7 +125,13 @@ router.get('/ruta', verifyToken, async (req, res) => {
       rutasMapped.push(doc);
     }
 
-    const activeRuta = rutasMapped.length > 0 ? rutasMapped[0] : null;
+    let activeRuta = null;
+    if (req.query.id_ruta) {
+      activeRuta = rutasMapped.find(r => String(r._id) === String(req.query.id_ruta));
+    }
+    if (!activeRuta) {
+      activeRuta = rutasMapped.length > 0 ? rutasMapped[0] : null;
+    }
     let activeEstudiantes = [];
     if (activeRuta) {
       const studentsFromDb = await Estudiante.find({ conductor_id: usuario._id, ruta_id: activeRuta._id });
@@ -291,6 +301,35 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
   }
 });
 
+// DELETE eliminar ruta del conductor
+router.delete('/ruta/:rutaId', verifyToken, async (req, res) => {
+  try {
+    const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
+    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    const ruta = await Ruta.findById(req.params.rutaId);
+    if (!ruta) return res.status(404).json({ error: 'Ruta no encontrada' });
+
+    if (String(ruta.conductor_id) !== String(usuario._id)) {
+      return res.status(403).json({ error: 'No tienes permiso para eliminar esta ruta' });
+    }
+
+    // Unset the route from any students assigned to it
+    const Estudiante = require('../models/Estudiante');
+    await Estudiante.updateMany(
+      { ruta_id: ruta._id },
+      { $unset: { ruta_id: "" } }
+    );
+
+    await Ruta.findByIdAndDelete(req.params.rutaId);
+
+    res.json({ success: true, message: 'Ruta eliminada correctamente' });
+  } catch (error) {
+    console.error('Error al eliminar la ruta:', error);
+    res.status(500).json({ error: 'Error interno al eliminar la ruta' });
+  }
+});
+
 // GET ruta de un conductor por su ID (usado por padres)
 router.get('/:id/ruta', verifyToken, async (req, res) => {
   try {
@@ -390,7 +429,7 @@ router.get('/disponibles', verifyToken, async (req, res) => {
     if (zona) filtro.zona = zona;
     if (escuela) filtro.escuela = escuela;
 
-    const rutas = await Ruta.find(filtro).populate('conductor_id', 'nombre apellido foto_perfil');
+    const rutas = await Ruta.find(filtro).populate('conductor_id', 'nombre apellido foto_perfil datos_conductor');
 
     const conductoresMap = new Map();
     for (const ruta of rutas) {
@@ -398,12 +437,25 @@ router.get('/disponibles', verifyToken, async (req, res) => {
       const cid = ruta.conductor_id._id.toString();
       if (!conductoresMap.has(cid)) {
         const vehiculo = await Vehiculo.findOne({ conductor_id: cid });
+        const Estudiante = require('../models/Estudiante');
+        const numAsientos = vehiculo ? (vehiculo.num_asientos || 15) : 15;
+        const occupiedSeats = await Estudiante.countDocuments({ conductor_id: cid });
+        const plazasDisponibles = Math.max(0, numAsientos - occupiedSeats);
+
+        const rating = (ruta.conductor_id.datos_conductor?.calificacion_promedio) || 5.0;
+        const reviews = (ruta.conductor_id.datos_conductor?.total_reviews) || 0;
+        const telefono = ruta.conductor_id.datos_conductor?.telefono || '';
+
         conductoresMap.set(cid, {
           _id: ruta.conductor_id._id,
           nombre: ruta.conductor_id.nombre,
           apellido: ruta.conductor_id.apellido,
           foto_perfil: ruta.conductor_id.foto_perfil,
+          telefono,
+          rating,
+          reviews,
           vehiculo: vehiculo || null,
+          plazasDisponibles,
           rutas: [],
         });
       }
@@ -412,6 +464,7 @@ router.get('/disponibles', verifyToken, async (req, res) => {
         escuela: ruta.escuela,
         zona: ruta.zona,
         nombre: ruta.nombre,
+        nombre_ruta: ruta.nombre_ruta || ruta.nombre,
       });
     }
 

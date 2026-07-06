@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet,
   StatusBar, ScrollView, TextInput, Alert, ActivityIndicator,
-  Platform, Animated, Keyboard, FlatList
+  Platform, Animated, Keyboard, FlatList, KeyboardAvoidingView, Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -91,6 +91,19 @@ function RutaPadre({ navigation, usuario }) {
           return;
         }
 
+        // 1.5 Obtener acuerdo activo del padre
+        let activeAgreement = null;
+        try {
+          const resAcuerdo = await api.get('/api/acuerdos/mis-acuerdos', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (resAcuerdo.data && resAcuerdo.data.acuerdo) {
+            activeAgreement = resAcuerdo.data.acuerdo;
+          }
+        } catch (err) {
+          console.log('Error fetching active agreement:', err.message);
+        }
+
         // 2. Obtener el perfil y vehículo del conductor
         let condInfo = null;
         let vehiculoInfo = null;
@@ -134,15 +147,37 @@ function RutaPadre({ navigation, usuario }) {
 
         const destinoEscuela = rutaInfo.escuela_id ? (typeof rutaInfo.escuela_id === 'object' ? (rutaInfo.escuela_id.nombre || rutaInfo.escuela) : rutaInfo.escuela) : (rutaInfo.escuela || 'Escuela asignada');
         // Mapear paradas de forma dinámica basada en el origen y destino
-        const paradasList = [
-          { orden: 1, descripcion: `Punto de recogida — Hogar de ${firstChild.nombre}`, hora: rutaInfo.horario?.split('—')[0]?.trim() || '6:30 AM' },
-          { orden: 2, descripcion: `Destino — ${destinoEscuela}`, hora: rutaInfo.horario?.split('—')[1]?.trim() || '7:15 AM' }
+        const paradasIdaList = [
+          { descripcion: `Punto de recogida — Hogar de ${firstChild.nombre}`, hora: rutaInfo.horario?.split('—')[0]?.trim() || '6:30 AM' },
+          { descripcion: `Destino — ${destinoEscuela}`, hora: rutaInfo.horario?.split('—')[1]?.trim() || '7:15 AM' }
         ];
+
+        const paradasVueltaList = [
+          { descripcion: `Punto de recogida — ${destinoEscuela}`, hora: 'Salida de clases' },
+          { descripcion: `Destino — Hogar de ${firstChild.nombre}`, hora: 'Retorno a casa' }
+        ];
+
+        const formatFrecuencia = (frec) => {
+          if (!frec) return 'Lunes a Viernes';
+          if (typeof frec === 'string') return frec;
+          if (Array.isArray(frec)) {
+            const hasLaV = frec.length === 5 && 
+              frec.includes('Lunes') && 
+              frec.includes('Martes') && 
+              frec.includes('Miércoles') && 
+              frec.includes('Jueves') && 
+              frec.includes('Viernes');
+            if (hasLaV) return 'Lunes a Viernes';
+            if (frec.length === 7) return 'Todos los días';
+            return frec.join(', ');
+          }
+          return 'Lunes a Viernes';
+        };
 
         setRuta({
           conductor: {
             nombre: condInfo ? `${condInfo.nombre} ${condInfo.apellido}` : 'Carlos Pérez',
-            telefono: condInfo?.datos_conductor?.telefono || '6500-1234',
+            telefono: condInfo?.telefono || condInfo?.datos_conductor?.telefono || '6500-1234',
             vehiculo: vehiculoInfo ? `${vehiculoInfo.marca} ${vehiculoInfo.modelo} (${vehiculoInfo.anio})` : 'Toyota Coaster 2020',
             placa: vehiculoInfo?.placa || 'BC-8888',
             asientos: vehiculoInfo?.num_asientos || 30,
@@ -152,12 +187,13 @@ function RutaPadre({ navigation, usuario }) {
           },
           escuela: destinoEscuela,
           zona: rutaInfo.zona || 'Arraiján',
-          frecuencia: rutaInfo.frecuencia || 'Lunes a Viernes',
+          frecuencia: formatFrecuencia(rutaInfo.frecuencia),
           horario: rutaInfo.horario || '6:30 AM — 7:15 AM',
-          tarifa: condInfo?.datos_conductor?.tarifa || 80,
-          mesActual: 3, // Simulado por defecto
-          totalMeses: 10,
-          paradas: paradasList,
+          tarifa: activeAgreement ? activeAgreement.tarifa_mensual : (condInfo?.datos_conductor?.tarifa || 80),
+          mesActual: activeAgreement ? activeAgreement.mes_actual : 1,
+          totalMeses: activeAgreement ? activeAgreement.total_meses : 10,
+          paradasIda: paradasIdaList,
+          paradasVuelta: paradasVueltaList,
           hijos: hijosList,
         });
 
@@ -241,7 +277,28 @@ function RutaPadre({ navigation, usuario }) {
           </View>
           <TouchableOpacity
             style={styles.btnWhatsapp}
-            onPress={() => Alert.alert('WhatsApp', `Contactar a ${ruta.conductor.nombre}`)}
+            onPress={async () => {
+              const telefono = ruta.conductor.telefono;
+              if (!telefono) {
+                Alert.alert('Error', 'El conductor no tiene un número de teléfono registrado.');
+                return;
+              }
+              const num = telefono.replace(/[^0-9]/g, '');
+              const fullNum = num.startsWith('507') ? num : `507${num}`;
+              const mensaje = `Hola, buenas. Quería consultarle sobre el servicio de BusWay.`;
+              const url = `https://wa.me/${fullNum}?text=${encodeURIComponent(mensaje)}`;
+              try {
+                const soportado = await Linking.canOpenURL(url);
+                if (soportado) {
+                  await Linking.openURL(url);
+                } else {
+                  Alert.alert('Error', 'No se pudo abrir WhatsApp. Verifica que esté instalado.');
+                }
+              } catch (err) {
+                console.log('Error opening whatsapp link:', err);
+                Alert.alert('Error', 'No se pudo abrir WhatsApp.');
+              }
+            }}
           >
             <Ionicons name="logo-whatsapp" size={18} color="#fff" />
           </TouchableOpacity>
@@ -286,33 +343,62 @@ function RutaPadre({ navigation, usuario }) {
         ))}
       </View>
 
-      {/* Paradas */}
+      {/* Paradas / Recorrido */}
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Recorrido</Text>
-      <View style={styles.paradasCard}>
-        {ruta.paradas.map((parada, i) => {
-          const esUltima = i === ruta.paradas.length - 1;
-          const esPrimera = i === 0;
-          return (
-            <View key={i} style={styles.paradaRow}>
-              {/* Línea de tiempo */}
-              <View style={styles.paradaTimeline}>
-                <View style={[
-                  styles.paradaPunto,
-                  esPrimera && styles.paradaPuntoPrimero,
-                  esUltima && styles.paradaPuntoUltimo,
-                ]} />
-                {!esUltima && <View style={styles.paradaLinea} />}
+      <View style={{ gap: 12 }}>
+        {/* Recorrido de Ida */}
+        <View style={styles.paradasCard}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#888', marginBottom: 12, textTransform: 'uppercase' }}>Mañana (Ida)</Text>
+          {ruta.paradasIda.map((parada, i) => {
+            const esUltima = i === ruta.paradasIda.length - 1;
+            const esPrimera = i === 0;
+            return (
+              <View key={i} style={styles.paradaRow}>
+                <View style={styles.paradaTimeline}>
+                  <View style={[
+                    styles.paradaPunto,
+                    esPrimera && styles.paradaPuntoPrimero,
+                    esUltima && styles.paradaPuntoUltimo,
+                  ]} />
+                  {!esUltima && <View style={styles.paradaLinea} />}
+                </View>
+                <View style={styles.paradaContenido}>
+                  <Text style={[styles.paradaDesc, (esPrimera || esUltima) && { fontWeight: '700', color: '#0D1B3E' }]}>
+                    {parada.descripcion}
+                  </Text>
+                  <Text style={styles.paradaHora}>{parada.hora}</Text>
+                </View>
               </View>
-              {/* Contenido */}
-              <View style={styles.paradaContenido}>
-                <Text style={[styles.paradaDesc, (esPrimera || esUltima) && { fontWeight: '700', color: '#0D1B3E' }]}>
-                  {parada.descripcion}
-                </Text>
-                <Text style={styles.paradaHora}>{parada.hora}</Text>
+            );
+          })}
+        </View>
+
+        {/* Recorrido de Vuelta */}
+        <View style={styles.paradasCard}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#888', marginBottom: 12, textTransform: 'uppercase' }}>Tarde (Vuelta)</Text>
+          {ruta.paradasVuelta.map((parada, i) => {
+            const esUltima = i === ruta.paradasVuelta.length - 1;
+            const esPrimera = i === 0;
+            return (
+              <View key={i} style={styles.paradaRow}>
+                <View style={styles.paradaTimeline}>
+                  <View style={[
+                    styles.paradaPunto,
+                    esPrimera && { backgroundColor: '#FFD700' }, // Amarillo para escuela
+                    esUltima && { backgroundColor: '#16A34A' }, // Verde para casa
+                  ]} />
+                  {!esUltima && <View style={styles.paradaLinea} />}
+                </View>
+                <View style={styles.paradaContenido}>
+                  <Text style={[styles.paradaDesc, (esPrimera || esUltima) && { fontWeight: '700', color: '#0D1B3E' }]}>
+                    {parada.descripcion}
+                  </Text>
+                  <Text style={styles.paradaHora}>{parada.hora}</Text>
+                </View>
               </View>
-            </View>
-          );
-        })}
+            );
+          })}
+        </View>
       </View>
 
       {/* Progreso del contrato */}
@@ -468,6 +554,7 @@ function RutaConductor({ navigation, usuario }) {
   const [formErrores, setFormErrores] = useState({});
   const [guardando, setGuardando] = useState(false);
   const [errorGuardar, setErrorGuardar] = useState('');
+  const [rutaIdEditando, setRutaIdEditando] = useState(null);
 
   const DAYS = [
     { key: 'Lunes', label: 'L' },
@@ -503,6 +590,10 @@ function RutaConductor({ navigation, usuario }) {
     setFormEscuelaId(escId);
     setMostrarListaEscuelas(false);
     setBusquedaEscuela('');
+    const escObj = listaEscuelas.find(e => e._id === escId);
+    if (escObj && escObj.distrito) {
+      setFormZona(escObj.distrito);
+    }
   };
 
   const escuelasFiltradas = listaEscuelas.filter(esc =>
@@ -549,6 +640,7 @@ function RutaConductor({ navigation, usuario }) {
         const mappedRutas = rutasBackend.map(r => ({
           id: r._id,
           nombre_ruta: r.nombre_ruta || r.nombre || 'Ruta sin nombre',
+          escuela_id: r.escuela_id && typeof r.escuela_id === 'object' ? r.escuela_id._id : (r.escuela_id || null),
           escuela_nombre: r.escuela_id ? (typeof r.escuela_id === 'object' ? r.escuela_id.nombre : r.escuela) : (r.escuela || 'Escuela asignada'),
           zona: r.zona || 'Arraiján',
           zonas: r.zona ? [r.zona] : ['Arraiján'],
@@ -652,16 +744,25 @@ function RutaConductor({ navigation, usuario }) {
       setErrorGuardar('');
       const token = await auth.currentUser.getIdToken();
       
-      const res = await api.post('/api/conductor/ruta', {
+      const payload = {
         escuela_id: formEscuelaId,
         nombre_ruta: formNombreRuta.trim(),
         zona: formZona.trim(),
         horario_salida: formatTime12h(formSalidaDate),
         horario_llegada: formatTime12h(formLlegadaDate),
         frecuencia: formFrecuencia
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      };
+
+      let res;
+      if (rutaIdEditando) {
+        res = await api.patch(`/api/conductor/ruta/${rutaIdEditando}`, payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } else {
+        res = await api.post('/api/conductor/ruta', payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
       
       if (res.data && res.data.ruta) {
         await fetchConductorRutaYEstudiantes();
@@ -674,14 +775,94 @@ function RutaConductor({ navigation, usuario }) {
         setFormLlegadaDate(null);
         setFormFrecuencia(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
         setFormErrores({});
+        setRutaIdEditando(null);
         setMostrarCrear(false);
       }
     } catch (err) {
-      console.error('Error al crear ruta:', err);
-      setErrorGuardar(err.response?.data?.error || 'Error al crear la ruta. Inténtalo de nuevo.');
+      console.error('Error al guardar ruta:', err);
+      setErrorGuardar(err.response?.data?.error || 'Error al guardar la ruta. Inténtalo de nuevo.');
     } finally {
       setGuardando(false);
     }
+  };
+
+  const handlePrepararEdicion = (rut) => {
+    setRutaIdEditando(rut.id);
+    setFormNombreRuta(rut.nombre_ruta);
+    setFormEscuelaId(rut.escuela_id);
+    setFormZona(rut.zona);
+
+    if (rut.horario) {
+      const times = rut.horario.split('—');
+      if (times.length === 2) {
+        const parseTimeStr = (str) => {
+          const clean = str.trim();
+          const match = clean.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+          if (match) {
+            let h = parseInt(match[1]);
+            const m = parseInt(match[2]);
+            const isPM = match[3].toUpperCase() === 'PM';
+            if (isPM && h < 12) h += 12;
+            if (!isPM && h === 12) h = 0;
+            const d = new Date();
+            d.setHours(h, m, 0, 0);
+            return d;
+          }
+          return new Date();
+        };
+        setFormSalidaDate(parseTimeStr(times[0]));
+        setFormLlegadaDate(parseTimeStr(times[1]));
+      }
+    } else {
+      setFormSalidaDate(null);
+      setFormLlegadaDate(null);
+    }
+
+    if (Array.isArray(rut.frecuencia)) {
+      setFormFrecuencia(rut.frecuencia);
+    } else if (typeof rut.frecuencia === 'string') {
+      if (rut.frecuencia === 'Lunes a Viernes') {
+        setFormFrecuencia(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
+      } else if (rut.frecuencia === 'Todos los días') {
+        setFormFrecuencia(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']);
+      } else {
+        setFormFrecuencia(rut.frecuencia.split(',').map(s => s.trim()));
+      }
+    }
+
+    setMostrarCrear(true);
+    setRutaSeleccionada(null);
+  };
+
+  const confirmarEliminarRuta = (rutaId) => {
+    Alert.alert(
+      'Eliminar Ruta',
+      '¿Estás seguro de que deseas eliminar esta ruta? Los estudiantes asignados a esta ruta quedarán sin ruta asignada.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const token = await auth.currentUser.getIdToken();
+              await api.delete(`/api/conductor/ruta/${rutaId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              Alert.alert('Ruta Eliminada', 'La ruta ha sido eliminada con éxito.');
+              setRutaSeleccionada(null);
+              await fetchConductorRutaYEstudiantes();
+            } catch (err) {
+              console.error('Error al eliminar ruta:', err);
+              Alert.alert('Error', 'No se pudo eliminar la ruta.');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const moverEstudiante = (index, direccion) => {
@@ -731,15 +912,29 @@ function RutaConductor({ navigation, usuario }) {
   // ── Vista Formulario de Creación ──────────────────────────────────────────
   if (mostrarCrear) {
     return (
-      <View style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Botón volver */}
-          <TouchableOpacity onPress={() => { setMostrarCrear(false); setFormErrores({}); setErrorGuardar(''); }} style={styles.btnVolver}>
+          <TouchableOpacity onPress={() => { 
+            setMostrarCrear(false); 
+            setFormErrores({}); 
+            setErrorGuardar(''); 
+            setRutaIdEditando(null);
+            setFormEscuelaId('');
+            setFormNombreRuta('');
+            setFormZona('');
+            setFormSalidaDate(null);
+            setFormLlegadaDate(null);
+            setFormFrecuencia(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
+          }} style={styles.btnVolver}>
             <Ionicons name="arrow-back-outline" size={18} color="#0D1B3E" />
             <Text style={styles.btnVolverText}>Cancelar</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.sectionLabel, { marginBottom: 20 }]}>Crear Nueva Ruta</Text>
+          <Text style={[styles.sectionLabel, { marginBottom: 20 }]}>{rutaIdEditando ? 'Editar Ruta' : 'Crear Nueva Ruta'}</Text>
 
           {errorGuardar ? (
             <View style={styles.errorContainer}>
@@ -819,9 +1014,9 @@ function RutaConductor({ navigation, usuario }) {
                       const selected = formEscuelaId === esc._id;
                       return (
                         <TouchableOpacity
-                          key={esc._id}
-                          style={[styles.dropdownItem, selected && styles.dropdownItemSelected]}
-                          onPress={() => seleccionarEscuela(esc._id)}
+                           key={esc._id}
+                           style={[styles.dropdownItem, selected && styles.dropdownItemSelected]}
+                           onPress={() => seleccionarEscuela(esc._id)}
                         >
                           <Ionicons name="school-outline" size={16} color={selected ? "#0D1B3E" : "#888"} style={{ marginRight: 10 }} />
                           <Text style={[styles.dropdownItemText, selected && styles.dropdownItemTextSelected]}>
@@ -954,12 +1149,12 @@ function RutaConductor({ navigation, usuario }) {
             ) : (
               <>
                 <Ionicons name="checkmark-circle-outline" size={20} color="#0D1B3E" />
-                <Text style={styles.btnPrimaryText}>Confirmar y Crear Ruta</Text>
+                <Text style={styles.btnPrimaryText}>{rutaIdEditando ? 'Guardar Cambios' : 'Confirmar y Crear Ruta'}</Text>
               </>
             )}
           </TouchableOpacity>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     );
   }
 
@@ -968,129 +1163,152 @@ function RutaConductor({ navigation, usuario }) {
     const estudiantesDeRuta = estudiantes.filter(e => e.ruta_id === rutaSeleccionada.id);
 
     return (
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-        {/* Botón volver */}
-        <TouchableOpacity onPress={() => { setRutaSeleccionada(null); setEditando(false); }} style={styles.btnVolver}>
-          <Ionicons name="arrow-back-outline" size={18} color="#0D1B3E" />
-          <Text style={styles.btnVolverText}>Mis rutas</Text>
-        </TouchableOpacity>
-
-        {/* Resumen de la ruta */}
-        <View style={styles.rutaResumenCard}>
-          <View style={styles.rutaResumenTop}>
-            <View style={styles.rutaIconCircle}>
-              <Ionicons name="bus-outline" size={22} color="#0D1B3E" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rutaResumenNombrePrincipal}>{rutaSeleccionada.nombre_ruta}</Text>
-              <Text style={styles.rutaResumenEscuelaSecundario}>{rutaSeleccionada.escuela_nombre}</Text>
-              <Text style={styles.rutaResumenSub}>{rutaSeleccionada.horario} · {rutaSeleccionada.alumnos} estudiantes</Text>
-            </View>
-            <View style={[styles.estadoBadge, rutaSeleccionada.activa && styles.estadoBadgeActivo]}>
-              <View style={[styles.estadoPunto, rutaSeleccionada.activa && { backgroundColor: '#16A34A' }]} />
-              <Text style={[styles.estadoBadgeText, rutaSeleccionada.activa && { color: '#16A34A' }]}>
-                {rutaSeleccionada.activa ? 'Activa' : 'Inactiva'}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.divider} />
-          
-          {/* Frecuencia en el detalle */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 8, gap: 6 }}>
-            <Ionicons name="calendar-outline" size={14} color="#888" />
-            <Text style={{ fontSize: 12, fontWeight: '600', color: '#888', marginRight: 4 }}>Frecuencia:</Text>
-            {renderFrecuenciaTextoUChips(rutaSeleccionada.frecuencia)}
-          </View>
-          
-          <View style={styles.divider} />
-          <View style={styles.zonasRow}>
-            {rutaSeleccionada.zonas.map((z, i) => (
-              <View key={i} style={styles.zonaChip}>
-                <Ionicons name="location-outline" size={11} color="#00AEEF" />
-                <Text style={styles.zonaChipText}>{z}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Encabezado tabla */}
-        <View style={styles.tablaHeader}>
-          <Text style={styles.tablaHeaderOrden}>Orden</Text>
-          <Text style={styles.tablaHeaderNombre}>Estudiante</Text>
-          <TouchableOpacity
-            style={[styles.btnEditar, editando && styles.btnEditarActivo]}
-            onPress={() => setEditando(!editando)}
-          >
-            <Ionicons name={editando ? 'checkmark-circle' : 'create-outline'} size={14} color={editando ? '#fff' : '#0D1B3E'} />
-            <Text style={[styles.btnEditarText, editando && { color: '#fff' }]}>
-              {editando ? 'Listo' : 'Editar'}
-            </Text>
+          {/* Botón volver */}
+          <TouchableOpacity onPress={() => { setRutaSeleccionada(null); setEditando(false); }} style={styles.btnVolver}>
+            <Ionicons name="arrow-back-outline" size={18} color="#0D1B3E" />
+            <Text style={styles.btnVolverText}>Mis rutas</Text>
           </TouchableOpacity>
-        </View>
 
-        {/* Lista de estudiantes */}
-        {estudiantesDeRuta.length === 0 ? (
-          <View style={styles.emptyEstudiantes}>
-            <Ionicons name="people-outline" size={32} color="#ccc" />
-            <Text style={styles.emptyTitle}>Sin estudiantes en esta ruta</Text>
-          </View>
-        ) : (
-          estudiantesDeRuta.map((est, index) => (
-            <View
-              key={est.id}
-              style={[styles.filaEstudiante, editando && styles.filaEstudianteEditando]}
-            >
-              {/* Número de orden */}
-              <TextInput
-                style={[styles.inputOrden, editando && styles.inputOrdenActivo]}
-                value={est.inputPos}
-                keyboardType="numeric"
-                editable={editando}
-                onChangeText={(t) => cambiarPosicion(index, t)}
-              />
-
-              {/* Info */}
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.estNombre}>{est.nombre}</Text>
-                <Text style={styles.estZona}>
-                  <Ionicons name="location-outline" size={11} color="#888" /> {est.zona}
+          {/* Resumen de la ruta */}
+          <View style={styles.rutaResumenCard}>
+            <View style={styles.rutaResumenTop}>
+              <View style={styles.rutaIconCircle}>
+                <Ionicons name="bus-outline" size={22} color="#0D1B3E" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rutaResumenNombrePrincipal}>{rutaSeleccionada.nombre_ruta}</Text>
+                <Text style={styles.rutaResumenEscuelaSecundario}>{rutaSeleccionada.escuela_nombre}</Text>
+                <Text style={styles.rutaResumenSub}>{rutaSeleccionada.horario} · {rutaSeleccionada.alumnos} estudiantes</Text>
+              </View>
+              <View style={[styles.estadoBadge, rutaSeleccionada.activa && styles.estadoBadgeActivo]}>
+                <View style={[styles.estadoPunto, rutaSeleccionada.activa && { backgroundColor: '#16A34A' }]} />
+                <Text style={[styles.estadoBadgeText, rutaSeleccionada.activa && { color: '#16A34A' }]}>
+                  {rutaSeleccionada.activa ? 'Activa' : 'Inactiva'}
                 </Text>
               </View>
-
-              {/* Flechas (solo en modo edición) */}
-              {editando && (
-                <View style={styles.flechasRow}>
-                  <TouchableOpacity
-                    disabled={index === 0}
-                    style={index === 0 && { opacity: 0.25 }}
-                    onPress={() => moverEstudiante(index, 'ARRIBA')}
-                  >
-                    <Ionicons name="arrow-up-circle-outline" size={26} color="#00AEEF" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    disabled={index === estudiantesDeRuta.length - 1}
-                    style={index === estudiantesDeRuta.length - 1 && { opacity: 0.25 }}
-                    onPress={() => moverEstudiante(index, 'ABAJO')}
-                  >
-                    <Ionicons name="arrow-down-circle-outline" size={26} color="#00AEEF" />
-                  </TouchableOpacity>
-                </View>
-              )}
             </View>
-          ))
-        )}
+            <View style={styles.divider} />
+            
+            {/* Frecuencia en el detalle */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 8, gap: 6 }}>
+              <Ionicons name="calendar-outline" size={14} color="#888" />
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#888', marginRight: 4 }}>Frecuencia:</Text>
+              {renderFrecuenciaTextoUChips(rutaSeleccionada.frecuencia)}
+            </View>
+            
+            <View style={styles.divider} />
+            <View style={styles.zonasRow}>
+              {rutaSeleccionada.zonas.map((z, i) => (
+                <View key={i} style={styles.zonaChip}>
+                  <Ionicons name="location-outline" size={11} color="#00AEEF" />
+                  <Text style={styles.zonaChipText}>{z}</Text>
+                </View>
+              ))}
+            </View>
 
-        {/* Botón iniciar ruta */}
-        <TouchableOpacity
-          style={styles.btnIniciar}
-          onPress={() => navigation.navigate('Viaje', { usuario })}
-        >
-          <Ionicons name="play-circle" size={20} color="#0D1B3E" />
-          <Text style={styles.btnIniciarText}>Iniciar Ruta en Tiempo Real</Text>
-        </TouchableOpacity>
+            <View style={styles.divider} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 4 }}
+                onPress={() => handlePrepararEdicion(rutaSeleccionada)}
+              >
+                <Ionicons name="create-outline" size={16} color="#00AEEF" />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#00AEEF' }}>Editar info</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 4 }}
+                onPress={() => confirmarEliminarRuta(rutaSeleccionada.id)}
+              >
+                <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#EF4444' }}>Eliminar ruta</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-      </ScrollView>
+          {/* Encabezado tabla */}
+          <View style={styles.tablaHeader}>
+            <Text style={styles.tablaHeaderOrden}>Orden</Text>
+            <Text style={styles.tablaHeaderNombre}>Estudiante</Text>
+            <TouchableOpacity
+              style={[styles.btnEditar, editando && styles.btnEditarActivo]}
+              onPress={() => setEditando(!editando)}
+            >
+              <Ionicons name={editando ? 'checkmark-circle' : 'create-outline'} size={14} color={editando ? '#fff' : '#0D1B3E'} />
+              <Text style={[styles.btnEditarText, editando && { color: '#fff' }]}>
+                {editando ? 'Listo' : 'Editar'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Lista de estudiantes */}
+          {estudiantesDeRuta.length === 0 ? (
+            <View style={styles.emptyEstudiantes}>
+              <Ionicons name="people-outline" size={32} color="#ccc" />
+              <Text style={styles.emptyTitle}>Sin estudiantes en esta ruta</Text>
+            </View>
+          ) : (
+            estudiantesDeRuta.map((est, index) => (
+              <View
+                key={est.id}
+                style={[styles.filaEstudiante, editando && styles.filaEstudianteEditando]}
+              >
+                {/* Número de orden */}
+                <TextInput
+                  style={[styles.inputOrden, editando && styles.inputOrdenActivo]}
+                  value={est.inputPos}
+                  keyboardType="numeric"
+                  editable={editando}
+                  onChangeText={(t) => cambiarPosicion(index, t)}
+                />
+
+                {/* Info */}
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.estNombre}>{est.nombre}</Text>
+                  <Text style={styles.estZona}>
+                    <Ionicons name="location-outline" size={11} color="#888" /> {est.zona}
+                  </Text>
+                </View>
+
+                {/* Flechas (solo en modo edición) */}
+                {editando && (
+                  <View style={styles.flechasRow}>
+                    <TouchableOpacity
+                      disabled={index === 0}
+                      style={index === 0 && { opacity: 0.25 }}
+                      onPress={() => moverEstudiante(index, 'ARRIBA')}
+                    >
+                      <Ionicons name="arrow-up-circle-outline" size={26} color="#00AEEF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      disabled={index === estudiantesDeRuta.length - 1}
+                      style={index === estudiantesDeRuta.length - 1 && { opacity: 0.25 }}
+                      onPress={() => moverEstudiante(index, 'ABAJO')}
+                    >
+                      <Ionicons name="arrow-down-circle-outline" size={26} color="#00AEEF" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            ))
+          )}
+
+          {/* Botón iniciar ruta */}
+          <TouchableOpacity
+            style={styles.btnIniciar}
+            onPress={() => navigation.navigate('Viaje', { usuario })}
+          >
+            <Ionicons name="play-circle" size={20} color="#0D1B3E" />
+            <Text style={styles.btnIniciarText}>Iniciar Ruta en Tiempo Real</Text>
+          </TouchableOpacity>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   }
 
@@ -1565,13 +1783,13 @@ const styles = StyleSheet.create({
   // Mini chips
   miniChipsContainer: {
     flexDirection: 'row',
-    gap: 3,
+    gap: 8,
     alignItems: 'center',
   },
   miniChip: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1582,7 +1800,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E3ECF7',
   },
   miniChipText: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '700',
   },
   miniChipTextSelected: {

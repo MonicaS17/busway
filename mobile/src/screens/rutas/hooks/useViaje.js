@@ -136,16 +136,11 @@ export default function useViaje({ usuario, esPadre }) {
         setIdViaje(activeTrip._id);
         setTipoViaje(activeTrip.tipo_viaje || 'ida');
         setCurrentStep(reconstruirStep(activeTrip));
-      } else if (rutaData.faseViaje === 'entre_viajes') {
-        // Si no hay viaje activo pero estamos entre viajes, iniciar en SCHOOL_CHECKIN para la vuelta
-        setCurrentStep('SCHOOL_CHECKIN');
-        setIdViaje(null);
-        setTipoViaje('vuelta');
       } else {
-        // No hay viaje activo ni entre viajes, iniciar en pre-viaje
+        // No hay viaje activo, iniciar siempre en PRE_TRIP para poder seleccionar la ruta
         setCurrentStep('PRE_TRIP');
         setIdViaje(null);
-        setTipoViaje('ida');
+        setTipoViaje(rutaData.faseViaje === 'entre_viajes' ? 'vuelta' : 'ida');
       }
     }
   }, [rutaData.loading, rutaData.estudiantes, rutaData.hijos, rutaData.activeTripInitial, esPadre, rutaData.faseViaje]);
@@ -433,12 +428,19 @@ export default function useViaje({ usuario, esPadre }) {
   };
 
   const comenzarAsistencia = () => {
-    if (socketRef.current && rutaData.rutaInfo) {
-      socketRef.current.emit('ruta:iniciar', {
-        id_ruta: rutaData.rutaInfo._id,
-        id_conductor: usuario._id,
-        tipo_viaje: tipoViaje
-      });
+    if (tipoViaje === 'vuelta') {
+      // Para el retorno (vuelta), pasamos lista antes de iniciar el viaje
+      setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
+      setCurrentStep('SCHOOL_CHECKIN');
+    } else {
+      // Para la ida, se inicia el viaje directamente
+      if (socketRef.current && rutaData.rutaInfo) {
+        socketRef.current.emit('ruta:iniciar', {
+          id_ruta: rutaData.rutaInfo._id,
+          id_conductor: usuario._id,
+          tipo_viaje: tipoViaje
+        });
+      }
     }
   };
 
