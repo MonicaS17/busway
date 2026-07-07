@@ -288,6 +288,7 @@ router.get('/checkout-status', verifyToken, async (req, res) => {
               const pm = await stripe.paymentMethods.retrieve(subscription.default_payment_method);
               if (pm.card?.last4) {
                 agreement.ultimos_4_digitos = pm.card.last4;
+                agreement.marca_tarjeta = pm.card.brand;
               }
             }
           } catch (err) {

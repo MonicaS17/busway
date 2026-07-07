@@ -128,6 +128,21 @@ router.patch('/:id/aceptar', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Esta solicitud ya fue procesada' });
     }
 
+    // Validar capacidad de asientos del vehículo
+    const Vehiculo = require('../models/Vehiculo');
+    const vehiculo = await Vehiculo.findOne({ conductor_id: conductor._id });
+    if (vehiculo) {
+      const activeEstsCount = await Estudiante.countDocuments({ conductor_id: conductor._id, estado: 'Activo' });
+      const availableSeats = vehiculo.num_asientos - activeEstsCount;
+      const requestedSeats = solicitud.hijos_ids.length;
+
+      if (availableSeats < requestedSeats) {
+        return res.status(400).json({
+          error: `No tienes suficientes asientos disponibles en tu vehículo. Puestos libres: ${availableSeats}, solicitados: ${requestedSeats}.`
+        });
+      }
+    }
+
     const { tarifa_mensual } = req.body;
     const tarifaFinal = (tarifa_mensual !== undefined && tarifa_mensual !== null)
       ? Number(tarifa_mensual)
