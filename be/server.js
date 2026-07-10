@@ -35,6 +35,16 @@ const io = new Server(server, {
 
 app.use(cors());
 
+// Cabeceras de seguridad para mitigar riesgos (OWASP ZAP)
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
 // Stripe webhook necesita el body raw (sin procesar) para verificar la firma
 // DEBE ir antes de express.json() para que no convierta el body a objeto
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));

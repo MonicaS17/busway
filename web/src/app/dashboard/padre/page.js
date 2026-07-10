@@ -25,10 +25,10 @@ export default function PadreDashboard() {
   const ultimoPago = pagos[0];
   const nombre = usuario ? `${usuario.nombre} ${usuario.apellido}` : 'Padre';
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem('busway_token');
     localStorage.removeItem('busway_usuario');
-    document.cookie = 'busway_token=; path=/; max-age=0';
+    await fetch('/api/logout', { method: 'POST' });
     window.location.href = '/login';
   };
 

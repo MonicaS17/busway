@@ -49,10 +49,10 @@ export default function AdminDashboard() {
     { href: '/dashboard/admin/ingresos', label: 'Revisar ingresos', desc: 'Pagos mensuales y exportación.' },
   ];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem('busway_token');
     localStorage.removeItem('busway_usuario');
-    document.cookie = 'busway_token=; path=/; max-age=0';
+    await fetch('/api/logout', { method: 'POST' });
     window.location.href = '/login';
   };
 

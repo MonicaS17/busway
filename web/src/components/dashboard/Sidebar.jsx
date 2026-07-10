@@ -61,10 +61,10 @@ export default function Sidebar({ role = 'admin' }) {
     role === 'conductor' ? conductorLinks :
     padreLinks;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem('busway_token');
     localStorage.removeItem('busway_usuario');
-    document.cookie = 'busway_token=; path=/; max-age=0';
+    await fetch('/api/logout', { method: 'POST' });
     router.push('/login');
   };
 

@@ -31,7 +31,13 @@ export default function LoginPage() {
       const token = await credencial.user.getIdToken();
 
       localStorage.setItem('busway_token', token);
-      document.cookie = `busway_token=${token}; path=/; max-age=3600`;
+      
+      // Establecer la cookie de sesion de manera segura (HttpOnly, Secure) en el servidor Next.js
+      await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
         method: 'POST',
