@@ -288,6 +288,7 @@ router.get('/checkout-status', verifyToken, async (req, res) => {
               const pm = await stripe.paymentMethods.retrieve(subscription.default_payment_method);
               if (pm.card?.last4) {
                 agreement.ultimos_4_digitos = pm.card.last4;
+                agreement.marca_tarjeta = pm.card.brand;
               }
             }
           } catch (err) {
@@ -332,7 +333,8 @@ router.get('/checkout-status', verifyToken, async (req, res) => {
             fecha: new Date(),
           });
           
-          agreement.mes_actual += 1;
+          const totalPagos = await Pago.countDocuments({ acuerdo_id: agreement._id, estado: 'Exitoso' });
+          agreement.mes_actual = totalPagos;
           await agreement.save();
           console.log(`[Local Fallback] Pago inicial creado y mes incrementado para acuerdo ${agreement._id}`);
         }

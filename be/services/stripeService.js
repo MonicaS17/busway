@@ -29,9 +29,11 @@ async function adjuntarMetodoPago(customerId, paymentMethodId, acuerdo) {
 
   const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
   const ultimos4 = paymentMethod.card.last4;
+  const brand = paymentMethod.card.brand;
 
   acuerdo.stripe_customer_id = customerId;
   acuerdo.ultimos_4_digitos = ultimos4;
+  acuerdo.marca_tarjeta = brand;
   await acuerdo.save();
 
   return { ultimos4 };
@@ -121,6 +123,7 @@ async function procesarEventoWebhook(event) {
             const pm = await stripe.paymentMethods.retrieve(pmId);
             if (pm.card?.last4) {
               acuerdo.ultimos_4_digitos = pm.card.last4;
+              acuerdo.marca_tarjeta = pm.card.brand;
             }
           }
         } catch (err) {
@@ -186,7 +189,8 @@ async function procesarEventoWebhook(event) {
         fecha: new Date(),
       });
 
-      acuerdo.mes_actual += 1;
+      const totalPagos = await Pago.countDocuments({ acuerdo_id: acuerdo._id, estado: 'Exitoso' });
+      acuerdo.mes_actual = totalPagos;
       if (acuerdo.mes_actual > acuerdo.total_meses) {
         acuerdo.estado = 'finalizado';
       }

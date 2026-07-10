@@ -240,14 +240,15 @@ export default function MarketplaceScreen({ navigation, route }) {
     setSolicitudes(nuevas);
   };
 
-  const agregarSolicitud = async (conductor, hijo, escuela) => {
+  const agregarSolicitud = async (conductor, hijo, escuela, rutaId) => {
     try {
       const token = await auth.currentUser.getIdToken();
       const res = await api.post('/api/solicitudes', {
         conductor_id: conductor._id,
         hijos_ids: [hijo._id],
-        tarifa_mensual: conductor.tarifa,
+        tarifa_mensual: conductor.tarifa || 0,
         escuela,
+        ruta_id: rutaId,
       }, { headers: { Authorization: `Bearer ${token}` } });
       setSolicitudes(prev => [res.data.solicitud, ...prev]);
       return true;
@@ -372,6 +373,7 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores,
     plazasDisponibles: c.plazasDisponibles || 0,
     verificado: c.verificado || false,
     telefono: c.telefono || '',
+    rutas: c.rutas || [],
   }));
 
   if (!ubicacion && !mostrarFormulario) {
@@ -394,8 +396,8 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores,
         usuario={usuario}
         hijos={hijos}
         ubicacion={ubicacion}
-        onEnviar={async (hijo, escuela) => {
-          const exito = await onAgregarSolicitud(conductorSeleccionado, hijo, escuela);
+        onEnviar={async (hijo, escuela, rutaId) => {
+          const exito = await onAgregarSolicitud(conductorSeleccionado, hijo, escuela, rutaId);
           if (exito) {
             setConductorSeleccionado(null);
             setTabActivo('enviadas');
@@ -566,19 +568,23 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores,
 // ─── Pantalla de solicitud ────────────────────────────────────────────────────
 function PantallaSolicitud({ conductor, usuario, hijos, ubicacion, onEnviar, onCancelar }) {
   const [hijoSeleccionado, setHijoSeleccionado] = useState(null);
+  const [rutaSeleccionada, setRutaSeleccionada] = useState(
+    conductor.rutas && conductor.rutas.length > 0 ? conductor.rutas[0]._id : null
+  );
   const [enviando, setEnviando] = useState(false);
 
   const hijoObj = hijos.find(h => h._id === hijoSeleccionado);
-  const puedeEnviar = hijoSeleccionado !== null && !enviando;
+  const puedeEnviar = hijoSeleccionado !== null && rutaSeleccionada !== null && !enviando;
 
   const handleWhatsApp = async () => {
     if (!puedeEnviar) return;
     setEnviando(true);
 
     try {
-      const escuela = conductor.escuelas[0];
+      const selectedRouteObj = conductor.rutas.find(r => r._id === rutaSeleccionada);
+      const escuela = selectedRouteObj ? selectedRouteObj.escuela : (conductor.escuelas[0] || 'Escuela');
       
-      const exito = await onEnviar(hijoObj, escuela);
+      const exito = await onEnviar(hijoObj, escuela, rutaSeleccionada);
       
       if (exito) {
         const mensaje =
@@ -586,7 +592,10 @@ function PantallaSolicitud({ conductor, usuario, hijos, ubicacion, onEnviar, onC
           `Mi nombre es *${usuario.nombre} ${usuario.apellido}* y me gustaría consultar la disponibilidad de ruta para mi hijo/a *${hijoObj.nombre}* hacia la escuela *${escuela}*. ` +
           `Quedo atento/a para coordinar los detalles. ¡Muchas gracias!`;
 
-        const url = `https://wa.me/50766032950?text=${encodeURIComponent(mensaje)}`;
+        const tel = conductor.telefono || '6603-2950';
+        const num = tel.replace(/[^0-9]/g, '');
+        const fullNum = num.startsWith('507') ? num : `507${num}`;
+        const url = `https://wa.me/${fullNum}?text=${encodeURIComponent(mensaje)}`;
 
         const soportado = await Linking.canOpenURL(url);
         if (soportado) {
@@ -644,10 +653,6 @@ function PantallaSolicitud({ conductor, usuario, hijos, ubicacion, onEnviar, onC
                 <Text style={styles.ratingTexto}>{conductor.rating} ({conductor.reviews} reseñas)</Text>
               </View>
             </View>
-            <View style={styles.tarifaBox}>
-              <Text style={styles.tarifaNum}>${conductor.tarifa}</Text>
-              <Text style={styles.tarifaMes}>/mes</Text>
-            </View>
           </View>
           <View style={styles.divider} />
           <FilaDatoCompacta icon="school-outline" label="Escuela" valor={conductor.escuelas[0]} />
@@ -670,6 +675,48 @@ function PantallaSolicitud({ conductor, usuario, hijos, ubicacion, onEnviar, onC
             last
           />
         </View>
+
+        <Text style={[styles.sectionLabel, { marginTop: 20 }]}>¿Para cuál ruta?</Text>
+        <Text style={styles.sectionSub}>Selecciona la ruta de este conductor en la que deseas inscribir a tu hijo.</Text>
+
+        {!conductor.rutas || conductor.rutas.length === 0 ? (
+          <View style={styles.emptyHijos}>
+            <Ionicons name="bus-outline" size={32} color="#ccc" />
+            <Text style={styles.emptyHijosTitle}>Sin rutas registradas</Text>
+            <Text style={styles.emptyHijosDesc}>
+              Este conductor no tiene rutas activas actualmente.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.hijosLista}>
+            {conductor.rutas.map(rut => {
+              const activo = rutaSeleccionada === rut._id;
+              return (
+                <TouchableOpacity
+                  key={rut._id}
+                  style={[styles.hijoCard, activo && styles.hijoCardActivo]}
+                  onPress={() => setRutaSeleccionada(rut._id)}
+                  activeOpacity={0.85}
+                >
+                  <View style={[styles.hijoAvatar, { backgroundColor: '#E3ECF7' }, activo && { backgroundColor: '#0D1B3E' }]}>
+                    <Ionicons name="bus-outline" size={16} color={activo ? '#fff' : '#0D1B3E'} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[styles.hijoNombre, { marginBottom: 2 }, activo && styles.hijoNombreActivo]}>
+                      {rut.nombre_ruta || rut.nombre}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#888' }}>
+                      {rut.escuela} · {rut.zona}
+                    </Text>
+                  </View>
+                  <View style={[styles.radioCircle, activo && styles.radioCircleActivo]}>
+                    {activo && <View style={styles.radioDot} />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         <Text style={[styles.sectionLabel, { marginTop: 20 }]}>¿Para cuál hijo?</Text>
         <Text style={styles.sectionSub}>Selecciona quién recibirá este servicio.</Text>
@@ -852,7 +899,7 @@ function MarketplaceConductor({ navigation, usuario, rutas, solicitudes, onAcept
     escuela: r.escuela,
     zona: r.zona,
     zonas: r.zona ? [r.zona] : [],
-    alumnos: r.alumnos || 0,
+    alumnos: r.totalEstudiantes !== undefined ? r.totalEstudiantes : (r.alumnos || 0),
     activa: r.estado === 'activa',
   }));
 
@@ -1500,10 +1547,6 @@ function CardConductor({ conductor, onSolicitar }) {
             ))}
             <Text style={styles.ratingTexto}>{conductor.rating} ({conductor.reviews} reseñas)</Text>
           </View>
-        </View>
-        <View style={styles.tarifaBox}>
-          <Text style={styles.tarifaNum}>${conductor.tarifa}</Text>
-          <Text style={styles.tarifaMes}>/mes</Text>
         </View>
       </View>
       <View style={styles.conductorCardDivider} />

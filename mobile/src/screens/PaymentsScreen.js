@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity,
   StyleSheet, StatusBar, Alert, ScrollView,
-  Modal, ActivityIndicator, TextInput, RefreshControl, AppState
+  Modal, ActivityIndicator, TextInput, RefreshControl, AppState,
+  Platform, KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -685,122 +686,128 @@ function VistaConductor({ usuario, onRefreshUsuario }) {
 
   if (!usuario?.datos_conductor?.banco_info) {
     return (
-      <ScrollView
-        contentContainerStyle={styles.body}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refrescando} onRefresh={alRefrescar} colors={['#0D1B3E']} />
-        }
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.alertaPago}>
-          <View style={styles.alertaPagoIcono}>
-            <Ionicons name="wallet-outline" size={24} color="#0D1B3E" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.alertaPagoTitulo}>Configura tu Cuenta de Cobro</Text>
-            <Text style={styles.alertaPagoDesc}>
-              Para poder recibir los ingresos mensuales de los padres de familia, primero debes vincular tu cuenta bancaria o tarjeta de cobro.
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.sectionTitle}>Datos de Transferencia</Text>
-        
-        <Text style={styles.inputLabel}>Nombre del Banco</Text>
-        <TextInput
-          style={styles.formInput}
-          placeholder="Ej: Banco General, Banistmo..."
-          placeholderTextColor="#aaa"
-          value={bancoNombre}
-          onChangeText={setBancoNombre}
-        />
-
-        <Text style={[styles.inputLabel, { marginTop: 14 }]}>Tipo de Cuenta</Text>
-        <TouchableOpacity
-          style={styles.dropdownSelector}
-          onPress={() => setDropdownOpen(!dropdownOpen)}
-          activeOpacity={0.8}
+        <ScrollView
+          contentContainerStyle={styles.body}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={refrescando} onRefresh={alRefrescar} colors={['#0D1B3E']} />
+          }
         >
-          <Text style={styles.dropdownSelectorText}>{bancoTipo}</Text>
-          <Ionicons name={dropdownOpen ? 'chevron-up-outline' : 'chevron-down-outline'} size={16} color="#888" />
-        </TouchableOpacity>
-
-        {dropdownOpen && (
-          <View style={{ backgroundColor: '#F5F8FC', borderRadius: 12, marginTop: 4, borderWidth: 1, borderColor: '#E3ECF7', overflow: 'hidden' }}>
-            {['Ahorros', 'Corriente'].map(tipo => (
-              <TouchableOpacity
-                key={tipo}
-                style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: tipo === 'Ahorros' ? 1 : 0, borderBottomColor: '#E3ECF7' }}
-                onPress={() => {
-                  setBancoTipo(tipo);
-                  setDropdownOpen(false);
-                }}
-              >
-                <Text style={{ fontSize: 14, color: '#0D1B3E', fontWeight: bancoTipo === tipo ? '700' : '400' }}>{tipo}</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.alertaPago}>
+            <View style={styles.alertaPagoIcono}>
+              <Ionicons name="wallet-outline" size={24} color="#0D1B3E" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertaPagoTitulo}>Configura tu Cuenta de Cobro</Text>
+              <Text style={styles.alertaPagoDesc}>
+                Para poder recibir los ingresos mensuales de los padres de familia, primero debes vincular tu cuenta bancaria o tarjeta de cobro.
+              </Text>
+            </View>
           </View>
-        )}
 
-        <Text style={[styles.inputLabel, { marginTop: 14 }]}>Número de Cuenta o Tarjeta</Text>
-        <TextInput
-          style={styles.formInput}
-          placeholder="Ej: 04729831948"
-          placeholderTextColor="#aaa"
-          value={bancoCuenta}
-          onChangeText={setBancoCuenta}
-          keyboardType="numeric"
-        />
+          <Text style={styles.sectionTitle}>Datos de Transferencia</Text>
+          
+          <Text style={styles.inputLabel}>Nombre del Banco</Text>
+          <TextInput
+            style={styles.formInput}
+            placeholder="Ej: Banco General, Banistmo..."
+            placeholderTextColor="#aaa"
+            value={bancoNombre}
+            onChangeText={setBancoNombre}
+          />
 
-        <Text style={[styles.inputLabel, { marginTop: 14 }]}>Nombre del Titular</Text>
-        <TextInput
-          style={styles.formInput}
-          placeholder="Ej: Juan Pérez"
-          placeholderTextColor="#aaa"
-          value={bancoTitular}
-          onChangeText={setBancoTitular}
-        />
+          <Text style={[styles.inputLabel, { marginTop: 14 }]}>Tipo de Cuenta</Text>
+          <TouchableOpacity
+            style={styles.dropdownSelector}
+            onPress={() => setDropdownOpen(!dropdownOpen)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.dropdownSelectorText}>{bancoTipo}</Text>
+            <Ionicons name={dropdownOpen ? 'chevron-up-outline' : 'chevron-down-outline'} size={16} color="#888" />
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.btnGuardar, (!habilitado || guardandoBanco) && styles.btnDisabled]}
-          onPress={async () => {
-            if (!habilitado || guardandoBanco) return;
-            setGuardandoBanco(true);
-            try {
-              const token = await obtenerToken();
-              await api.patch('/api/auth/perfil/actualizar', {
-                banco_info: {
-                  banco_nombre: bancoNombre,
-                  banco_tipo: bancoTipo,
-                  banco_cuenta: bancoCuenta,
-                  banco_titular: bancoTitular
-                }
-              }, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              Alert.alert('Registro Exitoso', 'Tu información de cobro ha sido guardada correctamente.');
-              await onRefreshUsuario();
-            } catch (err) {
-              console.error(err);
-              Alert.alert('Error', 'No se pudo guardar la información de cobro.');
-            } finally {
-              setGuardandoBanco(false);
-            }
-          }}
-          disabled={!habilitado || guardandoBanco}
-          activeOpacity={0.85}
-        >
-          {guardandoBanco ? (
-            <ActivityIndicator size="small" color="#0D1B3E" />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle-outline" size={18} color="#0D1B3E" />
-              <Text style={styles.btnGuardarText}>Guardar Cuenta de Cobro</Text>
-            </>
+          {dropdownOpen && (
+            <View style={{ backgroundColor: '#F5F8FC', borderRadius: 12, marginTop: 4, borderWidth: 1, borderColor: '#E3ECF7', overflow: 'hidden' }}>
+              {['Ahorros', 'Corriente'].map(tipo => (
+                <TouchableOpacity
+                  key={tipo}
+                  style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: tipo === 'Ahorros' ? 1 : 0, borderBottomColor: '#E3ECF7' }}
+                  onPress={() => {
+                    setBancoTipo(tipo);
+                    setDropdownOpen(false);
+                  }}
+                >
+                  <Text style={{ fontSize: 14, color: '#0D1B3E', fontWeight: bancoTipo === tipo ? '700' : '400' }}>{tipo}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           )}
-        </TouchableOpacity>
-        <View style={{ height: 40 }} />
-      </ScrollView>
+
+          <Text style={[styles.inputLabel, { marginTop: 14 }]}>Número de Cuenta o Tarjeta</Text>
+          <TextInput
+            style={styles.formInput}
+            placeholder="Ej: 04729831948"
+            placeholderTextColor="#aaa"
+            value={bancoCuenta}
+            onChangeText={setBancoCuenta}
+            keyboardType="numeric"
+          />
+
+          <Text style={[styles.inputLabel, { marginTop: 14 }]}>Nombre del Titular</Text>
+          <TextInput
+            style={styles.formInput}
+            placeholder="Ej: Juan Pérez"
+            placeholderTextColor="#aaa"
+            value={bancoTitular}
+            onChangeText={setBancoTitular}
+          />
+
+          <TouchableOpacity
+            style={[styles.btnGuardar, (!habilitado || guardandoBanco) && styles.btnDisabled]}
+            onPress={async () => {
+              if (!habilitado || guardandoBanco) return;
+              setGuardandoBanco(true);
+              try {
+                const token = await obtenerToken();
+                await api.patch('/api/auth/perfil/actualizar', {
+                  banco_info: {
+                    banco_nombre: bancoNombre,
+                    banco_tipo: bancoTipo,
+                    banco_cuenta: bancoCuenta,
+                    banco_titular: bancoTitular
+                  }
+                }, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                Alert.alert('Registro Exitoso', 'Tu información de cobro ha sido guardada correctamente.');
+                await onRefreshUsuario();
+              } catch (err) {
+                console.error(err);
+                Alert.alert('Error', 'No se pudo guardar la información de cobro.');
+              } finally {
+                setGuardandoBanco(false);
+              }
+            }}
+            disabled={!habilitado || guardandoBanco}
+            activeOpacity={0.85}
+          >
+            {guardandoBanco ? (
+              <ActivityIndicator size="small" color="#0D1B3E" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={18} color="#0D1B3E" />
+                <Text style={styles.btnGuardarText}>Guardar Cuenta de Cobro</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   }
 

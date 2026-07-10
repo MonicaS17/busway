@@ -4,7 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function ViajeInicio({
   rutaInfo,
+  rutas = [],
+  rutaSeleccionadaId,
+  setRutaSeleccionadaId,
   tipoViaje,
+  setTipoViaje,
   estudiantes,
   iniciarRuta,
   comenzarAsistencia
@@ -44,6 +48,60 @@ export default function ViajeInicio({
             : 'Pasa lista de asistencia antes de iniciar el recorrido de vuelta a casa.'}
         </Text>
       </View>
+
+      <View style={styles.segmentContainer}>
+        <TouchableOpacity
+          style={[styles.segmentBtn, tipoViaje === 'ida' && styles.segmentBtnActivo]}
+          onPress={() => setTipoViaje('ida')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="sunny-outline" size={15} color={tipoViaje === 'ida' ? '#0D1B3E' : '#888'} />
+          <Text style={[styles.segmentText, tipoViaje === 'ida' && styles.segmentTextActivo]}>Mañana (Ida)</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.segmentBtn, tipoViaje === 'vuelta' && styles.segmentBtnActivo]}
+          onPress={() => setTipoViaje('vuelta')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="moon-outline" size={15} color={tipoViaje === 'vuelta' ? '#0D1B3E' : '#888'} />
+          <Text style={[styles.segmentText, tipoViaje === 'vuelta' && styles.segmentTextActivo]}>Tarde (Vuelta)</Text>
+        </TouchableOpacity>
+      </View>
+
+      {rutas && rutas.length > 0 && (
+        <View style={{ marginBottom: 20 }}>
+          <Text style={styles.sectionLabel}>Selecciona la Ruta a Iniciar</Text>
+          <View style={styles.rutasContainer}>
+            {rutas.map(r => {
+              const activo = rutaInfo?._id === r._id;
+              return (
+                <TouchableOpacity
+                  key={r._id}
+                  style={[styles.rutaSelectorCard, activo && styles.rutaSelectorCardActivo]}
+                  onPress={() => setRutaSeleccionadaId(r._id)}
+                  activeOpacity={0.85}
+                >
+                  <View style={[styles.rutaSelectorIconWrap, activo && styles.rutaSelectorIconWrapActivo]}>
+                    <Ionicons name="bus-outline" size={18} color={activo ? '#0D1B3E' : '#888'} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[styles.rutaSelectorNombre, activo && styles.rutaSelectorNombreActivo]}>
+                      {r.nombre_ruta || r.nombre || 'Ruta sin nombre'}
+                    </Text>
+                    <Text style={styles.rutaSelectorDetalle}>
+                      {r.escuela} · {r.zona}
+                    </Text>
+                  </View>
+                  <View style={[styles.radioCircle, activo && styles.radioCircleActivo]}>
+                    {activo && <View style={styles.radioDot} />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
 
       <View style={styles.miniStats}>
         <MiniStat valor={total}     label="Total"     color="#0D1B3E" />
@@ -113,4 +171,76 @@ const styles = StyleSheet.create({
   filaInfoIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E3ECF7' },
   filaInfoLabel: { fontSize: 11, color: '#888', marginBottom: 1 },
   filaInfoValor: { fontSize: 13, fontWeight: '600', color: '#0D1B3E' },
+  rutasContainer: { gap: 10, marginBottom: 4 },
+  rutaSelectorCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#F5F8FC', borderRadius: 16,
+    borderWidth: 1.5, borderColor: '#E3ECF7',
+    paddingVertical: 12, paddingHorizontal: 16,
+  },
+  rutaSelectorCardActivo: {
+    backgroundColor: '#FFFBE6', borderColor: '#FFD700',
+  },
+  rutaSelectorIconWrap: {
+    width: 38, height: 38, borderRadius: 12,
+    backgroundColor: '#E3ECF7', alignItems: 'center', justifyContent: 'center',
+  },
+  rutaSelectorIconWrapActivo: {
+    backgroundColor: '#FFD700',
+  },
+  rutaSelectorNombre: {
+    fontSize: 14, fontWeight: '700', color: '#0D1B3E',
+  },
+  rutaSelectorNombreActivo: {
+    color: '#0D1B3E',
+  },
+  rutaSelectorDetalle: {
+    fontSize: 11, color: '#888', marginTop: 2,
+  },
+  radioCircle: {
+    width: 18, height: 18, borderRadius: 9,
+    borderWidth: 2, borderColor: '#ccc',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  radioCircleActivo: {
+    borderColor: '#0D1B3E',
+  },
+  radioDot: {
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: '#0D1B3E',
+  },
+  segmentContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F5F8FC',
+    borderRadius: 14,
+    padding: 4,
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    marginBottom: 20,
+  },
+  segmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  segmentBtnActivo: {
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#888',
+  },
+  segmentTextActivo: {
+    color: '#0D1B3E',
+  },
 });

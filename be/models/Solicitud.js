@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const solicitudSchema = new mongoose.Schema({
   padre_id: { type: mongoose.Schema.Types.ObjectId, ref: 'usuarios', required: true },
   conductor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'usuarios', required: true },
+  ruta_id: { type: mongoose.Schema.Types.ObjectId, ref: 'rutas' },
   hijos_ids: [{ type: mongoose.Schema.Types.ObjectId, ref: 'estudiantes' }],
   tarifa_mensual: { type: Number, required: true },
   escuela: { type: String, required: true },

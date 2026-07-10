@@ -137,6 +137,21 @@ module.exports = (io) => {
           estado: 'activo',
           tipo_viaje: tipo_viaje || 'ida'
         });
+
+        // Notificar a todos los padres de los niños de esta ruta que el viaje ha iniciado
+        try {
+          const estudiantesRuta = await Estudiante.find({ ruta_id: id_ruta, estado: 'Activo' });
+          const tipoEfectivo = tipo_viaje || 'ida';
+          const titulo = tipoEfectivo === 'vuelta' ? '🚌 Viaje de vuelta iniciado' : '🚌 Viaje de ida iniciado';
+          const mensaje = tipoEfectivo === 'vuelta'
+            ? 'El conductor ha iniciado el viaje de regreso a casa.'
+            : 'El conductor ha iniciado el viaje rumbo a la escuela.';
+          for (const est of estudiantesRuta) {
+            await notificarPadre(est._id, nuevoViaje._id, 'viaje_iniciado', titulo, mensaje);
+          }
+        } catch (err) {
+          console.error('Error al enviar notificaciones de inicio de viaje:', err);
+        }
       } catch (error) {
         console.error('Error al iniciar ruta:', error);
         socket.emit('error:servidor', { mensaje: 'No se pudo guardar el hito de inicio.' });

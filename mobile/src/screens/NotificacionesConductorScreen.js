@@ -64,6 +64,8 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
   const [asistentes, setAsistentes] = useState([]);
   const [estudianteSeleccionado, setEstudianteSeleccionado] = useState(null);
   const [cargandoAsistentes, setCargandoAsistentes] = useState(false);
+  const [rutas, setRutas] = useState([]);
+  const [rutaSeleccionada, setRutaSeleccionada] = useState(null);
 
   const [recibidas, setRecibidas] = useState([]);
   const [sinLeerRecibidas, setSinLeerRecibidas] = useState(0);
@@ -99,6 +101,18 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
     } finally {
       setCargando(false);
       setRefrescando(false);
+    }
+  }, []);
+
+  const cargarRutas = useCallback(async () => {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.get('/api/conductor/rutas', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setRutas(response.data.rutas || []);
+    } catch (error) {
+      console.log('Error al cargar rutas del conductor:', error.message);
     }
   }, []);
 
@@ -145,7 +159,8 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
   useEffect(() => {
     cargarHistorial(true);
     cargarRecibidas(true);
-  }, [cargarHistorial, cargarRecibidas]);
+    cargarRutas();
+  }, [cargarHistorial, cargarRecibidas, cargarRutas]);
 
   useEffect(() => {
     if (tab === 'recibidos' && sinLeerRecibidas > 0) {
@@ -153,36 +168,78 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
     }
   }, [tab, sinLeerRecibidas]);
 
-  const cargarAsistentes = useCallback(async () => {
+  const cargarAsistentes = useCallback(async (tipoParam, selectedRutaId = null) => {
     setCargandoAsistentes(true);
+    const targetTipo = tipoParam || audiencia;
+    const targetRutaId = selectedRutaId || rutaSeleccionada?._id;
     try {
       const token = await auth.currentUser.getIdToken();
-      const response = await api.get('/api/notificaciones/conductor/asistentes', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const lista = response.data.asistentes || [];
-      setAsistentes(lista);
-      return lista;
+      if (targetTipo === 'individual') {
+        const response = await api.get('/api/conductor/estudiantes', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const lista = (response.data?.estudiantes || []).map(e => ({
+          _id: e._id,
+          nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
+          padre: e.padre_id,
+        }));
+        setAsistentes(lista);
+        return lista;
+      } else {
+        const url = targetRutaId
+          ? `/api/notificaciones/conductor/asistentes?ruta_id=${targetRutaId}`
+          : '/api/notificaciones/conductor/asistentes';
+        const response = await api.get(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const lista = response.data.asistentes || [];
+        setAsistentes(lista);
+        return lista;
+      }
     } catch (error) {
       setAsistentes([]);
-      Alert.alert('Error', error.response?.data?.error || 'No se pudieron cargar los asistentes.');
+      Alert.alert('Error', error.response?.data?.error || 'No se pudieron cargar los destinatarios.');
       return null;
     } finally {
       setCargandoAsistentes(false);
     }
-  }, []);
+  }, [audiencia, rutaSeleccionada]);
 
   const seleccionarAudiencia = async (tipo) => {
     setAudiencia(tipo);
     setEstudianteSeleccionado(null);
+    setRutaSeleccionada(null);
 
-    if (tipo === 'asistentes' || tipo === 'individual') {
-      const lista = await cargarAsistentes();
-      if (lista && lista.length === 0) {
-        const mensaje = tipo === 'individual'
-          ? 'No se encuentran estudiantes a bordo para enviar un mensaje de emergencia.'
-          : 'No se encontraron estudiantes a bordo para enviar el aviso.';
-        Alert.alert('Sin estudiantes a bordo', mensaje);
+    if (tipo === 'individual') {
+      await cargarAsistentes('individual');
+    } else if (tipo === 'asistentes') {
+      if (rutas.length > 1) {
+        const botones = rutas.slice(0, 3).map(r => ({
+          text: r.nombre_ruta || r.nombre || r.escuela,
+          onPress: async () => {
+            setRutaSeleccionada(r);
+            const lista = await cargarAsistentes('asistentes', r._id);
+            if (lista && lista.length === 0) {
+              Alert.alert('Sin estudiantes', `No hay estudiantes asistentes en la ruta de ${r.nombre_ruta || r.nombre}.`);
+            }
+          }
+        }));
+        
+        Alert.alert(
+          'Seleccionar Viaje/Ruta',
+          '¿De cuál de tus rutas deseas cargar los estudiantes asistentes de hoy?',
+          [
+            ...botones,
+            { text: 'Cancelar', style: 'cancel', onPress: () => { setAudiencia('todos'); setRutaSeleccionada(null); } }
+          ]
+        );
+      } else {
+        const r = rutas[0];
+        setRutaSeleccionada(r || null);
+        const lista = await cargarAsistentes('asistentes', r?._id || null);
+        if (lista && lista.length === 0) {
+          Alert.alert('Sin estudiantes', 'No hay estudiantes asistentes en tu ruta.');
+        }
       }
     }
   };
@@ -207,6 +264,7 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
           mensaje: mensaje.trim(),
           audiencia,
           estudiante_id: audiencia === 'individual' ? estudianteSeleccionado : undefined,
+          ruta_id: (audiencia === 'asistentes' && rutaSeleccionada) ? rutaSeleccionada._id : undefined,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -217,6 +275,7 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
       setMensaje('');
       setSeleccionado(null);
       setEstudianteSeleccionado(null);
+      setRutaSeleccionada(null);
       await cargarHistorial();
       setTab('historial');
     } catch (error) {
@@ -232,16 +291,16 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
       return;
     }
     if (audiencia === 'individual' && !estudianteSeleccionado) {
-      Alert.alert('Selecciona un estudiante', 'Elige al hijo asistente cuyo padre recibira la emergencia.');
+      Alert.alert('Selecciona un estudiante', 'Elige al estudiante cuyo padre recibirá la emergencia.');
       return;
     }
 
-    const asistente = asistentes.find((item) => item._id === estudianteSeleccionado);
+    const destinatarioObj = asistentes.find((item) => item._id === estudianteSeleccionado);
     const destino = audiencia === 'todos'
       ? 'todos los padres vinculados a tu ruta'
       : audiencia === 'asistentes'
-        ? 'los padres de los estudiantes asistentes de hoy'
-        : `el padre de ${asistente?.nombre || 'el estudiante seleccionado'}`;
+        ? `los padres de los estudiantes asistentes de la ruta ${rutaSeleccionada ? (rutaSeleccionada.nombre_ruta || rutaSeleccionada.nombre) : 'de hoy'}`
+        : `el padre de ${destinatarioObj?.nombre || 'el estudiante seleccionado'}`;
 
     Alert.alert(
       'Confirmar envío',
@@ -333,7 +392,7 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
                     <View>
                       <Text style={s.sectionTitle}>Seleccionar estudiante</Text>
                     </View>
-                    <TouchableOpacity style={s.refreshBtn} onPress={cargarAsistentes} disabled={cargandoAsistentes}>
+                    <TouchableOpacity style={s.refreshBtn} onPress={() => cargarAsistentes('individual')} disabled={cargandoAsistentes}>
                       <Ionicons name="refresh-outline" size={18} color="#0D1B3E" />
                     </TouchableOpacity>
                   </View>
@@ -366,6 +425,27 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
                       </TouchableOpacity>
                     );
                   })}
+                </View>
+              )}
+
+              {audiencia === 'asistentes' && (
+                <View style={s.recipientSection}>
+                  <View style={s.recipientHeader}>
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                      <Text style={s.sectionTitle}>Ruta seleccionada</Text>
+                      <Text style={{ fontSize: 13, color: '#0D1B3E', fontWeight: '600', marginTop: 4 }}>
+                        {rutaSeleccionada ? (rutaSeleccionada.nombre_ruta || rutaSeleccionada.nombre) : 'Ninguna seleccionada'}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#8A94A6', marginTop: 2 }}>
+                        {rutaSeleccionada ? `${rutaSeleccionada.escuela_nombre || rutaSeleccionada.escuela} · ${rutaSeleccionada.zona}` : 'Selecciona una ruta para notificar'}
+                      </Text>
+                    </View>
+                    {rutas.length > 1 && (
+                      <TouchableOpacity style={s.refreshBtn} onPress={() => seleccionarAudiencia('asistentes')}>
+                        <Ionicons name="swap-horizontal-outline" size={18} color="#0D1B3E" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               )}
 
