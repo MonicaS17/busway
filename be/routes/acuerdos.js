@@ -101,7 +101,8 @@ router.get('/mis-acuerdos', verifyToken, async (req, res) => {
               fecha: new Date(),
             });
             
-            acuerdo.mes_actual += 1;
+            const totalPagos = await Pago.countDocuments({ acuerdo_id: acuerdo._id, estado: 'Exitoso' });
+            acuerdo.mes_actual = totalPagos;
             await acuerdo.save();
             console.log(`[Self-Healing] Pago inicial creado y mes incrementado para acuerdo ${acuerdo._id}`);
           }

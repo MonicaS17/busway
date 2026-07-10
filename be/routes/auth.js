@@ -230,21 +230,41 @@ router.patch('/perfil/actualizar', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    const { nombre, apellido, foto_perfil, telefono, banco_info } = req.body;
+    const { nombre, apellido, foto_perfil, telefono, banco_info, vehiculo } = req.body;
 
     if (nombre) usuario.nombre = nombre;
     if (apellido) usuario.apellido = apellido;
     if (foto_perfil !== undefined) usuario.foto_perfil = foto_perfil;
-
-    if (usuario.tipo === 'conductor') {
-      if (telefono || banco_info !== undefined) {
+    if (telefono !== undefined) {
+      usuario.telefono = telefono;
+      if (usuario.tipo === 'conductor') {
         usuario.datos_conductor = {
           ...(usuario.datos_conductor || {}),
+          telefono
         };
-        if (telefono) usuario.datos_conductor.telefono = telefono;
-        if (banco_info !== undefined) usuario.datos_conductor.banco_info = banco_info;
-        
         usuario.markModified('datos_conductor');
+      }
+    }
+
+    if (usuario.tipo === 'conductor') {
+      if (banco_info !== undefined) {
+        usuario.datos_conductor = {
+          ...(usuario.datos_conductor || {}),
+          banco_info
+        };
+        usuario.markModified('datos_conductor');
+      }
+
+      if (vehiculo) {
+        const v = await Vehiculo.findOne({ conductor_id: usuario._id });
+        if (v) {
+          if (vehiculo.placa !== undefined) v.placa = vehiculo.placa;
+          if (vehiculo.marca !== undefined) v.marca = vehiculo.marca;
+          if (vehiculo.modelo !== undefined) v.modelo = vehiculo.modelo;
+          if (vehiculo.anio !== undefined) v.anio = vehiculo.anio;
+          if (vehiculo.num_asientos !== undefined) v.num_asientos = Number(vehiculo.num_asientos);
+          await v.save();
+        }
       }
     }
 

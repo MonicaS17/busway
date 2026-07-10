@@ -94,6 +94,13 @@ export default function DashboardScreen({ navigation, route }) {
     cargarSolicitudesConductor();
     cargarNotificacionesConductor();
     cargarAcuerdoPadre();
+
+    const unsubscribe = navigation.addListener('focus', () => {
+      cargarAvisosSinLeer();
+      cargarSolicitudesConductor();
+      cargarNotificacionesConductor();
+      cargarAcuerdoPadre();
+    });
     
     let intervalo;
     if (usuario.tipo === 'padre') {
@@ -121,10 +128,11 @@ export default function DashboardScreen({ navigation, route }) {
     const appStateSub = AppState.addEventListener('change', handleAppStateChange);
     
     return () => {
+      unsubscribe();
       if (intervalo) clearInterval(intervalo);
       appStateSub.remove();
     };
-  }, [cargarAvisosSinLeer, cargarSolicitudesConductor, cargarNotificacionesConductor, cargarAcuerdoPadre, usuario.tipo]);
+  }, [navigation, cargarAvisosSinLeer, cargarSolicitudesConductor, cargarNotificacionesConductor, cargarAcuerdoPadre, usuario.tipo]);
 
   const handleLogout = async () => {
     try {

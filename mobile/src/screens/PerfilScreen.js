@@ -18,6 +18,9 @@ export default function PerfilScreen({ navigation, route }) {
 
   const [usuarioActual, setUsuarioActual] = useState(usuario);
   const [cantidadHijos, setCantidadHijos] = useState(null);
+  const [vehiculoInfo, setVehiculoInfo] = useState(null);
+  const [activeStudentsMobileCount, setActiveStudentsMobileCount] = useState(0);
+  const [acuerdoInfo, setAcuerdoInfo] = useState(null);
 
   // Estados de Edición
   const [modalVisible, setModalVisible] = useState(false);
@@ -110,25 +113,67 @@ export default function PerfilScreen({ navigation, route }) {
     }
   };
 
-  //CARGAR CANTIDAD DE HIJOS (solo padres)
+  //CARGAR CANTIDAD DE HIJOS Y ACUERDO (solo padres)
   useEffect(() => {
     if (usuarioActual.tipo !== 'padre') return;
 
-    const cargarHijos = async () => {
+    const cargarDatosPadre = async () => {
       try {
         const token = await auth.currentUser.getIdToken();
-        const response = await api.get('/api/padre/mis-hijos', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setCantidadHijos(response.data.hijos?.length || 0);
+        const [hijosRes, acuerdoRes] = await Promise.all([
+          api.get('/api/padre/mis-hijos', {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          api.get('/api/acuerdos/mis-acuerdos', {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
+        setCantidadHijos(hijosRes.data.hijos?.length || 0);
+        setAcuerdoInfo(acuerdoRes.data.acuerdo);
       } catch (error) {
-        console.error('Error al cargar hijos:', error);
+        console.error('Error al cargar datos de padre en mobile:', error);
         setCantidadHijos(0);
       }
     };
 
-    cargarHijos();
+    cargarDatosPadre();
   }, [usuarioActual.tipo]);
+
+  // CARGAR VEHÍCULO Y ESTUDIANTES (solo conductores)
+  useEffect(() => {
+    if (usuarioActual.tipo !== 'conductor') return;
+
+    const cargarVehiculoYEstudiantes = async () => {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const [perfilRes, estudiantesRes] = await Promise.all([
+          api.get('/api/conductor/perfil', {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          api.get('/api/conductor/estudiantes', {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
+
+        setVehiculoInfo(perfilRes.data.vehiculo);
+        if (perfilRes.data.usuario) {
+          setUsuarioActual(perfilRes.data.usuario);
+        }
+        
+        const activeEstsCount = (estudiantesRes.data.estudiantes || []).filter(est => est.estado === 'Activo').length;
+        setActiveStudentsMobileCount(activeEstsCount);
+      } catch (error) {
+        console.error('Error al cargar datos de conductor en mobile:', error);
+      }
+    };
+
+    cargarVehiculoYEstudiantes();
+  }, [usuarioActual.tipo]);
+
+  const formatCardBrand = (brand) => {
+    if (!brand) return 'Tarjeta';
+    return brand.charAt(0).toUpperCase() + brand.slice(1).toLowerCase();
+  };
 
   const datosGenerales = [
     { icon: 'person-outline', label: 'Nombre completo', value: `${usuarioActual.nombre} ${usuarioActual.apellido}` },
@@ -138,8 +183,17 @@ export default function PerfilScreen({ navigation, route }) {
 
   const datosConductor = [
     { icon: 'call-outline', label: 'Teléfono de contacto', value: usuarioActual.datos_conductor?.telefono || '—' },
-    { icon: 'bus-outline', label: 'Placa del bus', value: usuarioActual.vehiculo?.placa || '—' },
-    { icon: 'star-outline', label: 'Calificación', value: usuarioActual.datos_conductor?.calificacion_promedio ? `${usuarioActual.datos_conductor.calificacion_promedio} ⭐` : 'Sin calificaciones' },
+    { icon: 'bus-outline', label: 'Vehículo', value: vehiculoInfo ? `${vehiculoInfo.marca} ${vehiculoInfo.modelo}` : '—' },
+    { icon: 'card-outline', label: 'Placa del bus', value: vehiculoInfo?.placa || '—' },
+    { icon: 'grid-outline', label: 'Asientos iniciales', value: vehiculoInfo ? String(vehiculoInfo.num_asientos) : '—' },
+    { icon: 'checkmark-circle-outline', label: 'Asientos disponibles', value: vehiculoInfo ? String(Math.max(0, vehiculoInfo.num_asientos - activeStudentsMobileCount)) : '—' },
+    {
+      icon: 'wallet-outline',
+      label: 'Cuenta de cobro',
+      value: usuarioActual.datos_conductor?.banco_info?.banco_nombre
+        ? `Sí, registrada (${usuarioActual.datos_conductor.banco_info.banco_nombre})`
+        : 'No registrada'
+    },
   ];
 
   const datosPadre = [
@@ -148,7 +202,13 @@ export default function PerfilScreen({ navigation, route }) {
       label: 'Hijos registrados',
       value: cantidadHijos === null ? '...' : cantidadHijos.toString()
     },
-    { icon: 'card-outline', label: 'Tarjeta registrada', value: usuarioActual.datos_padre?.ultimos_4_digitos ? `•••• ${usuarioActual.datos_padre.ultimos_4_digitos}` : 'No registrada' },
+    {
+      icon: 'card-outline',
+      label: 'Tarjeta registrada',
+      value: acuerdoInfo?.stripe_subscription_id && acuerdoInfo?.ultimos_4_digitos
+        ? `Sí, registrada (${formatCardBrand(acuerdoInfo.marca_tarjeta || 'visa')} •••• ${acuerdoInfo.ultimos_4_digitos})`
+        : 'No registrada'
+    },
   ];
 
   const datosExtra = usuarioActual.tipo === 'conductor' ? datosConductor : datosPadre;

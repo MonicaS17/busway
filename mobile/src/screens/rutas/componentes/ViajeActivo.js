@@ -161,10 +161,10 @@ function ViajeActivoPadre({
         <Ionicons name={configVisual.icono} size={22} color={configVisual.colorIcono} />
       </View>
 
-      <Text style={styles.sectionLabel}>Ubicación del bus</Text>
-      <View style={styles.mapaContainer}>
-        {rutaActiva ? (
-          <>
+      {rutaActiva && (
+        <>
+          <Text style={styles.sectionLabel}>Ubicación del bus</Text>
+          <View style={styles.mapaContainer}>
             <MapView ref={mapRef} style={styles.mapaSimulado} provider={PROVIDER_DEFAULT} initialRegion={coordenadasBus}>
               <Marker coordinate={coordenadasBus} title="Autobús Escolar" zIndex={99}>
                 <View style={styles.customMarkerBus}><Text style={styles.markerEmoji}>🚌</Text></View>
@@ -180,15 +180,9 @@ function ViajeActivoPadre({
               <Ionicons name="information-circle-outline" size={14} color="#888" />
               <Text style={styles.mapaFooterText}>Actualización GPS cada 5 segundos · Socket.io</Text>
             </View>
-          </>
-        ) : (
-          <View style={styles.mapaInactivo}>
-            <Ionicons name="map-outline" size={40} color="#C8D6E5" />
-            <Text style={styles.mapaInactivoTitle}>Mapa no disponible</Text>
-            <Text style={styles.mapaInactivoDesc}>El mapa se activará cuando el conductor inicie el recorrido.</Text>
           </View>
-        )}
-      </View>
+        </>
+      )}
 
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Conductor</Text>
       <View style={styles.infoCard}>

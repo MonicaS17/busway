@@ -36,13 +36,17 @@ function formatearNotificacion(notificacion, usuarioId) {
   };
 }
 
-async function obtenerAsistentesDelDia(conductor) {
-  const viaje = await Viaje.findOne({
-    conductor_id: conductor._id,
-    estado: { $in: ['activo', 'en_curso'] },
-  }).sort({ createdAt: -1, hora_salida: -1 });
+async function obtenerAsistentesDelDia(conductor, chosenRutaId) {
+  let rutaId = chosenRutaId;
 
-  let rutaId = viaje ? viaje.ruta_id : null;
+  if (!rutaId) {
+    const viaje = await Viaje.findOne({
+      conductor_id: conductor._id,
+      estado: { $in: ['activo', 'en_curso'] },
+    }).sort({ createdAt: -1, hora_salida: -1 });
+
+    rutaId = viaje ? viaje.ruta_id : null;
+  }
 
   if (!rutaId) {
     // Si no hay viaje activo, buscar la primera ruta activa del conductor
@@ -65,23 +69,30 @@ async function obtenerAsistentesDelDia(conductor) {
     .select('_id nombre padre_id')
     .populate('padre_id', 'nombre apellido correo');
 
-  return { estudiantes, viajeId: viaje ? viaje._id : null };
+  // Obtener el viaje id si existe para esta ruta específica
+  const viaje = await Viaje.findOne({
+    conductor_id: conductor._id,
+    ruta_id: rutaId,
+    estado: { $in: ['activo', 'en_curso'] },
+  }).sort({ createdAt: -1 });
+
+  return { estudiantes, viajeId: viaje ? viaje._id : null, rutaId };
 }
 
-async function obtenerDestinatarios(conductor, audiencia, estudianteId) {
-  if (audiencia === 'asistentes' || audiencia === 'individual') {
-    const { estudiantes, viajeId } = await obtenerAsistentesDelDia(conductor);
+async function obtenerDestinatarios(conductor, audiencia, estudianteId, chosenRutaId) {
+  if (audiencia === 'individual') {
+    const estudiante = await Estudiante.findById(estudianteId).populate('padre_id', 'nombre apellido correo');
+    if (!estudiante?.padre_id?._id) return { padresIds: [], hijosIds: [], viajeId: null };
 
-    if (audiencia === 'individual') {
-      const estudiante = estudiantes.find((item) => String(item._id) === String(estudianteId));
-      if (!estudiante?.padre_id?._id) return { padresIds: [], hijosIds: [], viajeId };
+    return {
+      padresIds: [estudiante.padre_id._id],
+      hijosIds: [estudiante._id],
+      viajeId: null,
+    };
+  }
 
-      return {
-        padresIds: [estudiante.padre_id._id],
-        hijosIds: [estudiante._id],
-        viajeId,
-      };
-    }
+  if (audiencia === 'asistentes') {
+    const { estudiantes, viajeId } = await obtenerAsistentesDelDia(conductor, chosenRutaId);
 
     const estudiantesConPadre = estudiantes.filter((estudiante) => estudiante.padre_id?._id);
     const padresIds = [...new Set(estudiantesConPadre.map((estudiante) => String(estudiante.padre_id._id)))];
@@ -92,10 +103,15 @@ async function obtenerDestinatarios(conductor, audiencia, estudianteId) {
     };
   }
 
-  const estudiantes = await Estudiante.find({
+  // Todos (de una ruta específica si se pasa chosenRutaId, sino de todas)
+  const filter = {
     conductor_id: conductor._id,
     estado: 'Activo',
-  }).select('_id padre_id');
+  };
+  if (chosenRutaId) {
+    filter.ruta_id = chosenRutaId;
+  }
+  const estudiantes = await Estudiante.find(filter).select('_id padre_id');
 
   return {
     padresIds: [...new Set(estudiantes.map((estudiante) => String(estudiante.padre_id)))],
@@ -112,14 +128,14 @@ router.get('/conductor/asistentes', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Acceso exclusivo para conductores' });
     }
 
-    const { estudiantes, viajeId } = await obtenerAsistentesDelDia(conductor);
+    const { estudiantes, viajeId, rutaId } = await obtenerAsistentesDelDia(conductor, req.query.ruta_id);
     const asistentes = estudiantes.filter((estudiante) => estudiante.padre_id?._id).map((estudiante) => ({
       _id: estudiante._id,
       nombre: estudiante.nombre,
       padre: estudiante.padre_id,
     }));
 
-    res.json({ asistentes, viaje_id: viajeId });
+    res.json({ asistentes, viaje_id: viajeId, ruta_id: rutaId });
   } catch (error) {
     res.status(500).json({ error: 'No se pudieron obtener los asistentes de hoy' });
   }
@@ -144,7 +160,7 @@ router.post('/conductor/enviar', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Selecciona un estudiante asistente' });
     }
 
-    const { padresIds, hijosIds, viajeId } = await obtenerDestinatarios(conductor, audiencia, estudianteId);
+    const { padresIds, hijosIds, viajeId } = await obtenerDestinatarios(conductor, audiencia, estudianteId, req.body.ruta_id);
     if (padresIds.length === 0) {
       const detalle = audiencia === 'todos'
         ? 'No hay padres vinculados a tu ruta'
@@ -344,7 +360,7 @@ router.patch('/conductor/marcar-leidas/todas', verifyToken, async (req, res) => 
     }
 
     await Notificacion.updateMany(
-      { destinatarios: conductor._id, tipo: 'solicitud', 'lecturas.usuario_id': { $ne: conductor._id } },
+      { destinatarios: conductor._id, 'lecturas.usuario_id': { $ne: conductor._id } },
       { $push: { lecturas: { usuario_id: conductor._id, fecha_lectura: new Date() } } }
     );
 
