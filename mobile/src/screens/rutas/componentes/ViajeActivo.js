@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -35,11 +35,18 @@ function ViajeActivoPadre({
   rutaInfo,
   conductorInfo,
   hijos,
+  hijoSeleccionado,
   pulso,
-  bottomInset,
-  hijoSeleccionado
+  bottomInset
 }) {
   const firstChild = hijos.find(h => String(h.id) === String(hijoSeleccionado?._id || hijoSeleccionado?.id));
+
+  const mapRef = useRef(null);
+  useEffect(() => {
+    if (rutaActiva && mapRef.current) {
+      mapRef.current.animateToRegion(coordenadasBus, 800);
+    }
+  }, [coordenadasBus, rutaActiva]);
 
   if (!firstChild) {
     return (
@@ -48,7 +55,6 @@ function ViajeActivoPadre({
       </View>
     );
   }
-
   const estadoHijo = firstChild.estado || 'pendiente';
 
   //Mapeo de estados visuales para la pantalla del padre
@@ -72,7 +78,7 @@ function ViajeActivoPadre({
       if (estadoHijo === 'abordo') {
         estadoVisual = 'recogido_en_casa';
       } else {
-        estadoVisual = 'en_camino_recogida';
+        estadoVisual = 'esperando_ida';
       }
     }
   }
@@ -86,15 +92,6 @@ function ViajeActivoPadre({
       colorTexto: '#0D1B3E',
       colorIcono: '#888',
       activo: false
-    },
-    en_camino_recogida: {
-      icono: 'bus-outline',
-      titulo: 'El bus va en camino',
-      mensaje: 'El conductor ya inició la ruta y se dirige a recoger a tu hijo.',
-      colorFondo: '#3B82F6',
-      colorTexto: '#fff',
-      colorIcono: '#fff',
-      activo: true
     },
     recogido_en_casa: {
       icono: 'bus-outline',
@@ -142,16 +139,9 @@ function ViajeActivoPadre({
     activo: false
   };
 
-  const mapRef = useRef(null);
   const coordenadasHijo = firstChild?.latitud && firstChild?.longitud
     ? { latitude: Number(firstChild.latitud), longitude: Number(firstChild.longitud) }
     : { latitude: 8.9833, longitude: -79.5167 };
-
-  useEffect(() => {
-    if (rutaActiva && mapRef.current) {
-      mapRef.current.animateToRegion(coordenadasBus, 800);
-    }
-  }, [coordenadasBus, rutaActiva]);
 
   const getSafeText = (value, fallback = '') => {
     if (typeof value === 'string') return value.trim() || fallback;
@@ -164,7 +154,6 @@ function ViajeActivoPadre({
 
   return (
     <ScrollView contentContainerStyle={[styles.body, { paddingBottom: bottomInset + 24 }]} showsVerticalScrollIndicator={false}>
-      {/* Banner de estado */}
       <View style={[
         styles.estadoViajeBanner,
         { backgroundColor: configVisual.colorFondo }
@@ -185,35 +174,29 @@ function ViajeActivoPadre({
         <Ionicons name={configVisual.icono} size={22} color={configVisual.colorIcono} />
       </View>
 
-      {/* Ubicación del bus */}
-      <Text style={styles.sectionLabel}>Ubicación del bus</Text>
-      {faseViaje === 'en_curso' && rutaActiva ? (
-        <View style={styles.mapaContainer}>
-          <MapView ref={mapRef} style={styles.mapaSimulado} provider={PROVIDER_DEFAULT} initialRegion={coordenadasBus}>
-            <Marker coordinate={coordenadasBus} title="Autobús Escolar" zIndex={99}>
-              <View style={styles.customMarkerBus}><Text style={styles.markerEmoji}>🚌</Text></View>
-            </Marker>
-            <Marker coordinate={coordenadasHijo} title="Tu Hogar" zIndex={5}>
-              <View style={[styles.customMarkerHito, { backgroundColor: '#3B82F6' }]}><Text style={styles.markerEmojiSmall}>🏠</Text></View>
-            </Marker>
-            <Marker coordinate={{ latitude: 8.9975, longitude: -79.5240 }} title={rutaInfo?.escuela || 'Colegio San Agustín'} zIndex={5}>
-              <View style={[styles.customMarkerHito, { backgroundColor: '#10B981' }]}><Text style={styles.markerEmojiSmall}>🏫</Text></View>
-            </Marker>
-          </MapView>
-          <View style={styles.mapaFooter}>
-            <Ionicons name="information-circle-outline" size={14} color="#888" />
-            <Text style={styles.mapaFooterText}>Actualización GPS cada 5 segundos · Socket.io</Text>
+      {rutaActiva && (
+        <>
+          <Text style={styles.sectionLabel}>Ubicación del bus</Text>
+          <View style={styles.mapaContainer}>
+            <MapView ref={mapRef} style={styles.mapaSimulado} provider={PROVIDER_DEFAULT} initialRegion={coordenadasBus}>
+              <Marker coordinate={coordenadasBus} title="Autobús Escolar" zIndex={99}>
+                <View style={styles.customMarkerBus}><Text style={styles.markerEmoji}>🚌</Text></View>
+              </Marker>
+              <Marker coordinate={coordenadasHijo} title="Tu Hogar" zIndex={5}>
+                <View style={[styles.customMarkerHito, { backgroundColor: '#3B82F6' }]}><Text style={styles.markerEmojiSmall}>🏠</Text></View>
+              </Marker>
+              <Marker coordinate={{ latitude: 8.9975, longitude: -79.5240 }} title={rutaInfo?.escuela || 'Colegio San Agustín'} zIndex={5}>
+                <View style={[styles.customMarkerHito, { backgroundColor: '#10B981' }]}><Text style={styles.markerEmojiSmall}>🏫</Text></View>
+              </Marker>
+            </MapView>
+            <View style={styles.mapaFooter}>
+              <Ionicons name="information-circle-outline" size={14} color="#888" />
+              <Text style={styles.mapaFooterText}>Actualización GPS cada 5 segundos · Socket.io</Text>
+            </View>
           </View>
-        </View>
-      ) : (
-        <View style={styles.mapaInactivo}>
-          <Ionicons name="map-outline" size={40} color="#C8D6E5" />
-          <Text style={styles.mapaInactivoTitle}>Mapa no disponible</Text>
-          <Text style={styles.mapaInactivoDesc}>El mapa se activará cuando el conductor inicie el recorrido.</Text>
-        </View>
+        </>
       )}
 
-      {/* Conductor */}
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Conductor</Text>
       <View style={styles.infoCard}>
         <View style={styles.conductorRow}>
@@ -224,7 +207,28 @@ function ViajeActivoPadre({
             <Text style={styles.conductorNombre}>{getSafeText(conductorInfo?.nombre, 'Conductor')}</Text>
             <Text style={styles.conductorSub}>{getSafeText(conductorInfo?.datos_conductor?.vehiculo, 'Vehículo')} · {getSafeText(conductorInfo?.datos_conductor?.placa, 'Placa')}</Text>
           </View>
-          <TouchableOpacity style={styles.btnWA} onPress={() => Alert.alert('WhatsApp', `Contactar a ${getSafeText(conductorInfo?.nombre, 'el conductor')}`)}>
+          <TouchableOpacity style={styles.btnWA} onPress={async () => {
+            const telefono = conductorInfo?.telefono || conductorInfo?.datos_conductor?.telefono;
+            if (!telefono) {
+              Alert.alert('Error', 'El conductor no tiene un número de teléfono registrado.');
+              return;
+            }
+            const num = telefono.replace(/[^0-9]/g, '');
+            const fullNum = num.startsWith('507') ? num : `507${num}`;
+            const mensaje = `Hola, buenas. Quería consultarle sobre el viaje de BusWay.`;
+            const url = `https://wa.me/${fullNum}?text=${encodeURIComponent(mensaje)}`;
+            try {
+              const soportado = await Linking.canOpenURL(url);
+              if (soportado) {
+                await Linking.openURL(url);
+              } else {
+                Alert.alert('Error', 'No se pudo abrir WhatsApp. Verifica que esté instalado.');
+              }
+            } catch (err) {
+              console.log('Error opening whatsapp link:', err);
+              Alert.alert('Error', 'No se pudo abrir WhatsApp.');
+            }
+          }}>
             <Ionicons name="logo-whatsapp" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -233,7 +237,6 @@ function ViajeActivoPadre({
         <FilaInfoViaje icon="time-outline" label="Horario" valor={getSafeText(rutaInfo?.horario, '6:30 AM — 7:15 AM')} last />
       </View>
 
-      {/* Estado de tus hijos (siempre visible) */}
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Estado de tus hijos</Text>
       <View style={styles.infoCard}>
         {hijosAMostrar.map((hijo, i) => {

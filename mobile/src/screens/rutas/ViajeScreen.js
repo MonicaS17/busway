@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, StatusBar, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ActivityIndicator, ScrollView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import useViaje from './hooks/useViaje';
@@ -12,13 +12,12 @@ import ViajeFinalizado from './componentes/ViajeFinalizado';
 export default function ViajeScreen({ navigation, route }) {
   const { usuario, selectedRutaId, ruta_id } = route?.params || {};
   const esPadre = usuario?.tipo === 'padre';
-  const insets = useSafeAreaInsets();
-
   const [hijoSeleccionado, setHijoSeleccionado] = useState(null);
   const [mostrarGrid, setMostrarGrid] = useState(false);
-
   const activeRutaId = ruta_id || selectedRutaId;
   const activeHijoId = hijoSeleccionado?._id || hijoSeleccionado?.id || null;
+  const insets = useSafeAreaInsets();
+
   const viaje = useViaje({ usuario, esPadre, selectedHijoId: activeHijoId, selectedRutaId: activeRutaId });
 
   const uniqueRutas = useMemo(() => {
@@ -27,10 +26,8 @@ export default function ViajeScreen({ navigation, route }) {
       viaje.rawHijos.map(h => h.ruta_id?._id?.toString() || h.ruta_id?.toString()).filter(Boolean)
     ));
   }, [esPadre, viaje.rawHijos]);
-
   const tieneRutasDistintas = uniqueRutas.length > 1;
 
-  // Si viene hijoSeleccionado en route.params
   useEffect(() => {
     if (route?.params?.hijoSeleccionado) {
       setHijoSeleccionado(route.params.hijoSeleccionado);
@@ -40,13 +37,10 @@ export default function ViajeScreen({ navigation, route }) {
 
   useEffect(() => {
     if (!esPadre || !viaje.rawHijos || viaje.rawHijos.length === 0) return;
-
     if (viaje.rawHijos.length === 1 || uniqueRutas.length <= 1) {
-      // Caso A o C
       setHijoSeleccionado(viaje.rawHijos[0]);
       setMostrarGrid(false);
     } else {
-      // Caso B
       if (!hijoSeleccionado && !route?.params?.hijoSeleccionado) {
         setMostrarGrid(true);
       }
@@ -71,6 +65,18 @@ export default function ViajeScreen({ navigation, route }) {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#fff" />
           <Text style={styles.loadingText}>Cargando información del viaje...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (viaje.error) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={40} color="#DC2626" />
+          <Text style={styles.errorTitle}>Error</Text>
+          <Text style={styles.errorSub}>{viaje.error}</Text>
         </View>
       </SafeAreaView>
     );
@@ -115,14 +121,8 @@ export default function ViajeScreen({ navigation, route }) {
                       </View>
                       <Text style={{ fontSize: 13, color: '#666', marginLeft: 42 }}>{schoolName}</Text>
                     </View>
-                    <View style={[
-                      styles.estadoBadge,
-                      { backgroundColor: '#E6F9EE' }
-                    ]}>
-                      <Text style={[
-                        styles.estadoBadgeText,
-                        { color: '#16A34A' }
-                      ]}>
+                    <View style={[styles.estadoBadge, { backgroundColor: '#E6F9EE' }]}>
+                      <Text style={[styles.estadoBadgeText, { color: '#16A34A' }]}>
                         {hijo.estado || 'Activo'}
                       </Text>
                     </View>
@@ -131,18 +131,6 @@ export default function ViajeScreen({ navigation, route }) {
               })}
             </View>
           </ScrollView>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (viaje.error) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={40} color="#DC2626" />
-          <Text style={styles.errorTitle}>Error</Text>
-          <Text style={styles.errorSub}>{viaje.error}</Text>
         </View>
       </SafeAreaView>
     );
@@ -217,20 +205,6 @@ export default function ViajeScreen({ navigation, route }) {
       </View>
 
       <View style={styles.card}>
-        {esPadre && tieneRutasDistintas && viaje.rawHijos && viaje.rawHijos.length > 1 && (
-          <View style={styles.hijosTabsContainer}>
-            <TouchableOpacity
-              onPress={() => {
-                setHijoSeleccionado(null);
-                setMostrarGrid(true);
-              }}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}
-            >
-              <Ionicons name="arrow-back-outline" size={18} color="#0D1B3E" />
-              <Text style={styles.btnVolverText}>Cambiar estudiante</Text>
-            </TouchableOpacity>
-          </View>
-        )}
         {renderStep()}
       </View>
     </SafeAreaView>
@@ -257,39 +231,4 @@ const styles = StyleSheet.create({
   hijoMenuName: { fontSize: 16, fontWeight: 'bold', color: '#0D1B3E' },
   estadoBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E6F9EE', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20 },
   estadoBadgeText: { fontSize: 11, fontWeight: '700', color: '#16A34A' },
-  btnVolverText: { fontSize: 14, fontWeight: '600', color: '#0D1B3E' },
-  hijosTabsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: '6%',
-    paddingVertical: 12,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F4FA',
-    backgroundColor: '#fff',
-    marginBottom: 10,
-  },
-  hijoTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: '#F5F8FC',
-    borderWidth: 1.5,
-    borderColor: '#E3ECF7',
-    gap: 4,
-  },
-  hijoTabActive: {
-    backgroundColor: '#FFD700',
-    borderColor: '#FFD700',
-  },
-  hijoTabText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#888',
-  },
-  hijoTabTextActive: {
-    color: '#0D1B3E',
-    fontWeight: '700',
-  },
 });

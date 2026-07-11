@@ -1,44 +1,20 @@
 import { useState, useEffect } from 'react';
+import { auth } from '../../../config/firebase';
 import api from '../../../config/api';
-import { getAuthHeader } from '../../../utils/authToken';
 
 export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRutaId }) {
-  const esPadreEfectivo = esPadre || usuario?.tipo === 'padre';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [rutaInfo, setRutaInfo] = useState(null);
   const [estudiantes, setEstudiantes] = useState([]);
+  const [hijos, setHijos] = useState([]);
   const [conductorInfo, setConductorInfo] = useState(null);
   const [activeTripInitial, setActiveTripInitial] = useState(null);
   const [faseViaje, setFaseViaje] = useState('sin_viaje');
-  const [hijos, setHijos] = useState([]);
-  const [token, setToken] = useState(null);
-  const [rutas, setRutas] = useState([]);
+  const [token, setToken] = useState(null);               
 
-  const seleccionarRutaConductor = async (rutaId) => {
-    try {
-      setLoading(true);
-      const headers = await getAuthHeader();
-      console.log('[useRuta] seleccionarRutaConductor auth header:', headers.Authorization?.substring(0, 40));
-      const resDetalle = await api.get(`/api/conductor/ruta/${rutaId}`, {
-        headers
-      });
-      if (resDetalle.data && resDetalle.data.ruta) {
-        setRutaInfo(resDetalle.data.ruta);
-        const mapped = (resDetalle.data.estudiantes || []).map((e, idx) => ({
-          ...e,
-          id: e._id,
-          _id: e._id,
-          orden: e.orden || (idx + 1)
-        }));
-        setEstudiantes(mapped);
-      }
-    } catch (err) {
-      console.error('Error al seleccionar otra ruta:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [rutas, setRutas] = useState([]);
+  const [rutaSeleccionadaId, setRutaSeleccionadaId] = useState(null);
 
   useEffect(() => {
     if (!usuario) return;
@@ -48,14 +24,20 @@ export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRuta
         setLoading(true);
         setError('');
 
-        if (esPadreEfectivo) {
-          // ─── LOGICA DE PADRE ─────────────────────────────────────────────────────────
-          const headers = await getAuthHeader();
-          const tokenValue = headers.Authorization.replace('Bearer ', '');
-          setToken(tokenValue); // Guardar para revalidación en foreground
-          console.log('[useRuta] padre auth header:', headers.Authorization?.substring(0, 40));
+        if (!auth.currentUser) {
+          setError('Por favor, inicia sesión para continuar.');
+          setLoading(false);
+          return;
+        }
 
-          const resHijos = await api.get('/api/padre/mis-hijos', { headers });
+        const idToken = await auth.currentUser.getIdToken();
+        setToken(idToken); // Guardar para revalidación en foreground
+
+        if (esPadre) {
+          // ─── LOGICA DE PADRE ─────────────────────────────────────────────────────────
+          const resHijos = await api.get('/api/padre/mis-hijos', {
+            headers: { Authorization: `Bearer ${idToken}` }
+          });
 
           if (!resHijos.data || !resHijos.data.hijos || resHijos.data.hijos.length === 0) {
             setError('No tienes hijos registrados actualmente.');
@@ -66,22 +48,23 @@ export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRuta
           const hijosObtenidos = resHijos.data.hijos;
           setHijos(hijosObtenidos);
 
-          // Determinar qué hijo usar
-          let activeHijo = hijosObtenidos[0];
+          let activeHijo = null;
           if (selectedHijoId) {
-            const found = hijosObtenidos.find(h => h._id === selectedHijoId || h.id === selectedHijoId);
-            if (found) activeHijo = found;
+            activeHijo = hijosObtenidos.find(
+              (h) => String(h._id) === String(selectedHijoId) || String(h.id) === String(selectedHijoId)
+            );
+          }
+          if (!activeHijo) {
+            activeHijo = hijosObtenidos[0];
           }
 
-          const condId = activeHijo.conductor_id?._id || activeHijo.conductor_id;
-          const activeRutaId = activeHijo.ruta_id?._id || activeHijo.ruta_id;
-          console.log('[useRuta] selectedHijoId=', selectedHijoId, 'activeHijo=', activeHijo?._id, 'condId=', condId, 'activeRutaId=', activeRutaId);
+          const activeRutaId = activeHijo.ruta_id && typeof activeHijo.ruta_id === 'object'
+            ? activeHijo.ruta_id._id
+            : activeHijo.ruta_id;
 
-          if (!activeHijo?._id) {
-            setError('El estudiante seleccionado no tiene un identificador válido.');
-            setLoading(false);
-            return;
-          }
+          const condId = activeHijo.conductor_id && typeof activeHijo.conductor_id === 'object'
+            ? activeHijo.conductor_id._id
+            : activeHijo.conductor_id;
 
           if (!condId) {
             setError('Este estudiante no tiene un conductor asignado actualmente.');
@@ -97,34 +80,29 @@ export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRuta
 
           // Obtener perfil conductor
           try {
-  const resPerfil = await api.get(
-    `/api/conductor/${condId}/perfil`,
-    { headers }
-  );
-
-  if (resPerfil.data) {
-    setConductorInfo(resPerfil.data.conductor);
-  }
-} catch (err) {
-  console.log('Error fetching conductor profile:', err.message);
-}
+            const resPerfil = await api.get(`/api/conductor/${condId}/perfil`, {
+              headers: { Authorization: `Bearer ${idToken}` }
+            });
+            if (resPerfil.data) {
+              setConductorInfo(resPerfil.data.conductor);
+            }
+          } catch (err) {
+            console.log('Error fetching conductor profile:', err.message);
+          }
 
           // Obtener ruta del conductor
           let rInfo = null;
-
-try {
-  const resRuta = await api.get(
-    `/api/conductor/${condId}/ruta?ruta_id=${activeRutaId}`,
-    { headers }
-  );
-
-  if (resRuta.data && resRuta.data.ruta) {
-    rInfo = resRuta.data.ruta;
-    setRutaInfo(rInfo);
-  }
-} catch (err) {
-  console.log('Error fetching route info:', err.message);
-}
+          try {
+            const resRuta = await api.get(`/api/conductor/${condId}/ruta?ruta_id=${activeRutaId}`, {
+              headers: { Authorization: `Bearer ${idToken}` }
+            });
+            if (resRuta.data && resRuta.data.ruta) {
+              rInfo = resRuta.data.ruta;
+              setRutaInfo(rInfo);
+            }
+          } catch (err) {
+            console.log('Error fetching route info:', err.message);
+          }
 
           if (!rInfo) {
             setError('El conductor asignado no tiene una ruta configurada.');
@@ -134,7 +112,9 @@ try {
 
           // Obtener viaje activo con nueva estructura { viaje, fase }
           try {
-            const resViaje = await api.get(`/api/viajes/activo/padre?estudiante_id=${activeHijo._id}&ruta_id=${activeRutaId}`, { headers });
+            const resViaje = await api.get(`/api/viajes/activo/padre?estudiante_id=${activeHijo._id}&ruta_id=${activeRutaId}`, {
+              headers: { Authorization: `Bearer ${idToken}` }
+            });
             const respData = resViaje.data;
             if (respData && respData.viaje) {
               setActiveTripInitial(respData.viaje);
@@ -144,64 +124,44 @@ try {
               setFaseViaje(respData?.fase || 'sin_viaje');
             }
           } catch (err) {
-            console.log('Error fetching active trip for parent:', err.response?.status, err.response?.data || err.message || err);
-            setActiveTripInitial(null);
-            setFaseViaje('sin_viaje');
+            console.log('Error fetching active trip for parent:', err.message);
           }
 
         } else {
           // ─── LOGICA DE CONDUCTOR ─────────────────────────────────────────────────────────
-          const headers = await getAuthHeader();
-          setToken(headers.Authorization.replace('Bearer ', '')); // Guardar para revalidación en foreground
-          console.log('[useRuta] conductor auth header:', headers.Authorization?.substring(0, 40));
-          const resRuta = await api.get('/api/conductor/ruta', { headers });
+          const url = rutaSeleccionadaId
+            ? `/api/conductor/ruta?id_ruta=${rutaSeleccionadaId}`
+            : '/api/conductor/ruta';
+          const resRuta = await api.get(url, {
+            headers: { Authorization: `Bearer ${idToken}` }
+          });
 
-          if (!resRuta.data || (!resRuta.data.ruta && (!resRuta.data.rutas || resRuta.data.rutas.length === 0))) {
+          if (!resRuta.data || !resRuta.data.ruta) {
             setError('No tienes rutas asignadas actualmente.');
             setLoading(false);
             return;
           }
 
-          const allRoutes = resRuta.data.rutas || [];
-          setRutas(allRoutes);
-
-          // Si el conductor tiene una rutaInfo seleccionada en el estado local, usar esa.
-          // De lo contrario, si se pasó selectedRutaId, usar esa.
-          // De lo contrario, usar la primera ruta de allRoutes.
-          let r = rutaInfo;
-          if (!r && allRoutes.length > 0) {
-            if (selectedRutaId) {
-              const found = allRoutes.find(item => item._id === selectedRutaId);
-              r = found || allRoutes[0];
-            } else {
-              r = allRoutes[0];
-            }
-          }
-          if (r) {
-            setRutaInfo(r);
-          }
+          const r = resRuta.data.ruta;
+          setRutaInfo(r);
+          setRutas(resRuta.data.rutas || []);
 
           let estudiantesList = [];
-          if (r) {
-            try {
-              const resDetalle = await api.get(`/api/conductor/ruta/${r._id}`, { headers });
-              if (resDetalle.data && resDetalle.data.estudiantes) {
-                estudiantesList = resDetalle.data.estudiantes.map((e, idx) => ({
-                  ...e,
-                  id: e._id,
-                  _id: e._id,
-                  orden: e.orden || (idx + 1)
-                }));
-              }
-            } catch (err) {
-              console.log('Error loading selected route detail:', err.message);
-            }
+          if (resRuta.data && resRuta.data.estudiantes && resRuta.data.estudiantes.length > 0) {
+            estudiantesList = resRuta.data.estudiantes.map((e, idx) => ({
+              ...e,
+              id: e._id,
+              _id: e._id,
+              orden: e.orden || (idx + 1)
+            }));
           }
 
           if (estudiantesList.length > 0) {
             setEstudiantes(estudiantesList);
           } else {
-            const resEst = await api.get('/api/conductor/estudiantes', { headers });
+            const resEst = await api.get('/api/conductor/estudiantes', {
+              headers: { Authorization: `Bearer ${idToken}` }
+            });
             const estudiantesObtenidos = resEst.data?.estudiantes || [];
             setEstudiantes(estudiantesObtenidos.map((e, idx) => ({
               ...e,
@@ -212,7 +172,9 @@ try {
           }
 
           try {
-            const resViaje = await api.get('/api/viajes/activo/conductor', { headers });
+            const resViaje = await api.get('/api/viajes/activo/conductor', {
+              headers: { Authorization: `Bearer ${idToken}` }
+            });
             const respData = resViaje.data;
             if (respData && respData.viaje) {
               setActiveTripInitial(respData.viaje);
@@ -235,21 +197,23 @@ try {
     };
 
     loadData();
-  }, [usuario, esPadre, esPadreEfectivo, selectedHijoId, selectedRutaId]);
+  }, [usuario, esPadre, rutaSeleccionadaId, selectedHijoId, selectedRutaId]);
 
 
   return {
     loading,
     error,
     rutaInfo,
+    setRutaInfo,
+    rutas,
+    rutaSeleccionadaId,
+    setRutaSeleccionadaId,
     estudiantes,
     hijos,
     conductorInfo,
     activeTripInitial,
     faseViaje,
     token,   
-    setEstudiantes,
-    rutas,
-    seleccionarRutaConductor
+    setEstudiantes
   };
 }

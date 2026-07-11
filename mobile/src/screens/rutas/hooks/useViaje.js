@@ -3,7 +3,6 @@ import { io } from 'socket.io-client';
 import * as Location from 'expo-location';
 import { Alert, AppState } from 'react-native';
 import useRuta from './useRuta';
-import { getAuthHeader } from '../../../utils/authToken';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -35,8 +34,7 @@ function reconstruirIndiceActual(estudiantes, asistencias) {
 }
 
 export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRutaId }) {
-  const esPadreEfectivo = esPadre || usuario?.tipo === 'padre';
-  const rutaData = useRuta({ usuario, esPadre: esPadreEfectivo, selectedHijoId, selectedRutaId });
+  const rutaData = useRuta({ usuario, esPadre, selectedHijoId, selectedRutaId });
 
   // Conductor state
   const [currentStep, setCurrentStep] = useState('PRE_TRIP');
@@ -61,21 +59,6 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
   });
   const [hijos, setHijos] = useState([]);
 
-  // Reset state when active child changes to avoid showing previous child's state
-  useEffect(() => {
-    if (esPadreEfectivo) {
-      setRutaActiva(false);
-      setFaseViaje('sin_viaje');
-      setCoordenadasBus({
-        latitude: 8.9833,
-        longitude: -79.5167,
-        latitudeDelta: 0.006,
-        longitudeDelta: 0.006,
-      });
-      setHijos([]);
-    }
-  }, [selectedHijoId, selectedRutaId, esPadreEfectivo]);
-
   const socketRef = useRef(null);
   const [ultimoEscaneado, setUltimoEscaneado] = useState(null);
 
@@ -90,12 +73,12 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
   useEffect(() => {
     if (rutaData.loading) return;
 
-    if (esPadreEfectivo) {
+    if (esPadre) {
       const activeTrip = rutaData.activeTripInitial;
       const mappedHijos = rutaData.hijos.map(h => {
         let estado = 'pendiente';
         if (activeTrip && activeTrip.asistencias) {
-          const miAsistencia = activeTrip.asistencias.filter(a => String(a.hijo_id) === String(h._id));
+          const miAsistencia = activeTrip.asistencias.filter(a => a.hijo_id === h._id);
           if (miAsistencia.length > 0) {
             const ultima = miAsistencia[miAsistencia.length - 1];
             if (ultima.tipo === 'subida' || ultima.tipo === 'abordado') estado = 'abordo';
@@ -130,7 +113,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
       const mappedEst = rutaData.estudiantes.map(e => {
         let estado = 'pendiente';
         if (activeTrip && activeTrip.asistencias) {
-          const miAsistencia = activeTrip.asistencias.filter(a => String(a.hijo_id) === String(e._id));
+          const miAsistencia = activeTrip.asistencias.filter(a => a.hijo_id === e._id);
           if (miAsistencia.length > 0) {
             const ultima = miAsistencia[miAsistencia.length - 1];
             if (ultima.tipo === 'subida') estado = 'abordo';
@@ -153,41 +136,46 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         setIdViaje(activeTrip._id);
         setTipoViaje(activeTrip.tipo_viaje || 'ida');
         setCurrentStep(reconstruirStep(activeTrip));
-      } else if (rutaData.faseViaje === 'entre_viajes') {
-        // Si no hay viaje activo pero estamos entre viajes, iniciar en SCHOOL_CHECKIN para la vuelta
-        setCurrentStep('SCHOOL_CHECKIN');
-        setIdViaje(null);
-        setTipoViaje('vuelta');
       } else {
-        // No hay viaje activo ni entre viajes, iniciar en pre-viaje
+        // No hay viaje activo, iniciar siempre en PRE_TRIP para poder seleccionar la ruta
         setCurrentStep('PRE_TRIP');
         setIdViaje(null);
-        setTipoViaje('ida');
+        setTipoViaje(rutaData.faseViaje === 'entre_viajes' ? 'vuelta' : 'ida');
       }
     }
-  }, [rutaData.loading, rutaData.estudiantes, rutaData.hijos, rutaData.activeTripInitial, esPadreEfectivo, rutaData.faseViaje, selectedHijoId, selectedRutaId]);
+  }, [rutaData.loading, rutaData.estudiantes, rutaData.hijos, rutaData.activeTripInitial, esPadre, rutaData.faseViaje]);
+
+  // Resetear estado del viaje al cambiar de hijo/ruta seleccionado (evita mostrar el estado del hijo anterior mientras carga el nuevo)
+  useEffect(() => {
+    if (!esPadre) return;
+    setRutaActiva(false);
+    setFaseViaje('sin_viaje');
+    setCoordenadasBus({
+      latitude: 8.9833,
+      longitude: -79.5167,
+      latitudeDelta: 0.006,
+      longitudeDelta: 0.006,
+    });
+    setHijos([]);
+  }, [selectedHijoId, selectedRutaId, esPadre]);
 
   // ─── CONEXIÓN A SOCKET Y ESCUCHA DE EVENTOS ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (rutaData.loading || !rutaData.rutaInfo?._id) return;
 
-    const socketClient = io(BACKEND_URL);
+    const socketClient = io(BACKEND_URL, { transports: ['websocket'] });
     socketRef.current = socketClient;
 
     socketClient.on('connect', () => {
-      if (esPadreEfectivo) {
-        const activeChild = rutaData.hijos.find(h => String(h._id) === String(selectedHijoId)) || rutaData.hijos[0];
-        const activeRutaId = activeChild?.ruta_id?._id || activeChild?.ruta_id || rutaData.rutaInfo._id;
-        
-        socketClient.emit('unirse_sala', {
-          ruta_id: activeRutaId,
-          tipo: 'padre'
-        });
-        
+      if (esPadre) {
+        const activeHijo = rutaData.hijos.find(h => String(h._id) === String(selectedHijoId)) || rutaData.hijos[0];
+        const activeRutaId = (activeHijo?.ruta_id && typeof activeHijo.ruta_id === 'object')
+          ? activeHijo.ruta_id._id
+          : (activeHijo?.ruta_id || rutaData.rutaInfo._id);
         socketClient.emit('join:ruta', {
           id_ruta: activeRutaId,
           rol: 'padre',
-          id_estudiante: activeChild?._id
+          id_estudiante: activeHijo?._id
         });
       } else {
         socketClient.emit('join:ruta', { id_ruta: rutaData.rutaInfo._id, rol: 'conductor' });
@@ -195,7 +183,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
       }
     });
 
-    if (esPadreEfectivo) {
+    if (esPadre) {
       socketClient.on('ruta:iniciada', (data) => {
         setRutaActiva(true);
         setFaseViaje('en_curso');
@@ -243,9 +231,6 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         setTipoViaje(data.tipo_viaje);
         setCurrentStep('ACTIVE_TRIP');
       });
-      socketClient.on('ruta:error', (data) => {
-        Alert.alert('Error', data.mensaje || 'Ocurrió un error en la ruta.');
-      });
       socketClient.on('asistencia:actualizada', (data) => {
         setEstudiantes(prev => prev.map(est => {
           if (est.id === data.hijo_id) {
@@ -283,7 +268,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
     return () => {
       socketClient.disconnect();
     };
-  }, [rutaData.loading, rutaData.rutaInfo?._id, rutaData.hijos, esPadreEfectivo, selectedHijoId]);
+  }, [rutaData.loading, rutaData.rutaInfo?._id, rutaData.hijos, esPadre, selectedHijoId]);
 
   // ─── SEGUIMIENTO GPS DEL CONDUCTOR ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -322,25 +307,27 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
       }
     };
 
-    if (currentStep === 'ACTIVE_TRIP' && idViaje && !esPadreEfectivo) {
+    if (currentStep === 'ACTIVE_TRIP' && idViaje && !esPadre) {
       iniciarSeguimientoGPS();
     }
 
     return () => {
       if (GPSsubscription) GPSsubscription.remove();
     };
-  }, [currentStep, idViaje, esPadreEfectivo, rutaData.rutaInfo]);
+  }, [currentStep, idViaje, esPadre, rutaData.rutaInfo]);
 
   // Revalidar al volver al foreground (solo para padre)
   useEffect(() => {
-    if (!esPadreEfectivo) return;
+    if (!esPadre) return;
 
     const revalidarEstadoPadre = async () => {
       try {
-        const headers = await getAuthHeader();
-        console.log('[useViaje] auth header (revalidar padre):', headers.Authorization?.substring(0, 40));
-        const resp = await fetch(`${BACKEND_URL}/api/viajes/activo/padre?estudiante_id=${selectedHijoId || ''}&ruta_id=${selectedRutaId || ''}`, {
-          headers
+        const token = rutaData.token; // token provisto por useRuta
+        if (!token) return;
+        const hijoIdParaFetch = selectedHijoId || rutaData.hijos[0]?._id || '';
+        const rutaIdParaFetch = selectedRutaId || rutaData.rutaInfo?._id || '';
+        const resp = await fetch(`${BACKEND_URL}/api/viajes/activo/padre?estudiante_id=${hijoIdParaFetch}&ruta_id=${rutaIdParaFetch}`, {
+          headers: { Authorization: `Bearer ${token}` }
         });
         if (!resp.ok) return;
         const data = await resp.json();
@@ -371,7 +358,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
     });
 
     return () => subscription.remove();
-  }, [esPadreEfectivo, rutaData.token, selectedHijoId, selectedRutaId]);
+  }, [esPadre, rutaData.token, selectedHijoId, selectedRutaId]);
 
   // ─── FUNCIONES DE ACCIÓN ─────────────────────────────────────────────────────────
 
@@ -459,39 +446,36 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
     setTimeout(() => setUltimoEscaneado(null), 3000);
   };
 
-  const determinarTipoViaje = () => {
-    const hora = new Date().getHours();
-    return hora < 12 ? 'ida' : 'vuelta';
-  };
-
   const comenzarAsistencia = () => {
-    const routeIdToUse = selectedRutaId || rutaData.rutaInfo?._id;
-    if (socketRef.current && routeIdToUse) {
-      const tipoCalc = determinarTipoViaje();
-      socketRef.current.emit('ruta:iniciar', {
-        id_ruta: routeIdToUse,
-        ruta_id: routeIdToUse,
-        id_conductor: usuario._id,
-        tipo_viaje: tipoCalc,
-        tipo: tipoCalc
-      });
+    if (tipoViaje === 'vuelta') {
+      // Para el retorno (vuelta), pasamos lista antes de iniciar el viaje
+      setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
+      setCurrentStep('SCHOOL_CHECKIN');
+    } else {
+      // Para la ida, se inicia el viaje directamente
+      if (socketRef.current && rutaData.rutaInfo) {
+        socketRef.current.emit('ruta:iniciar', {
+          id_ruta: rutaData.rutaInfo._id,
+          id_conductor: usuario._id,
+          tipo_viaje: tipoViaje
+        });
+      }
     }
   };
 
   const iniciarRuta = () => {
-    const routeIdToUse = selectedRutaId || rutaData.rutaInfo?._id;
-    if (socketRef.current && routeIdToUse) {
-      const tipoCalc = determinarTipoViaje();
+    if (socketRef.current && rutaData.rutaInfo) {
+      // Si se llama desde SCHOOL_CHECKIN el tipo es siempre 'vuelta',
+      // independientemente del valor reactivo de tipoViaje en ese momento.
+      const tipoEfectivo = currentStep === 'SCHOOL_CHECKIN' ? 'vuelta' : tipoViaje;
       socketRef.current.emit('ruta:iniciar', {
-        id_ruta: routeIdToUse,
-        ruta_id: routeIdToUse,
+        id_ruta: rutaData.rutaInfo._id,
         id_conductor: usuario._id,
-        tipo_viaje: tipoCalc,
-        tipo: tipoCalc
+        tipo_viaje: tipoEfectivo
       });
       // Asegurar que el estado local refleja el tipo correcto
-      if (tipoCalc !== tipoViaje) {
-        setTipoViaje(tipoCalc);
+      if (tipoEfectivo !== tipoViaje) {
+        setTipoViaje(tipoEfectivo);
       }
     }
   };
