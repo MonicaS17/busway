@@ -10,6 +10,7 @@ const acuerdoSchema = new mongoose.Schema({
   stripe_customer_id: String,
   stripe_subscription_id: String,
   ultimos_4_digitos: String,
+  marca_tarjeta: String,
   mes_actual: { type: Number, default: 1 },
   total_meses: { type: Number, default: 10 },
   estado: { type: String, enum: ['activo', 'finalizado', 'cancelado'], default: 'activo' },

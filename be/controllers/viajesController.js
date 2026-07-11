@@ -16,15 +16,12 @@ exports.getViajeActivoConductor = async (req, res) => {
 
     let viajeActivo = null;
     if (fase === 'en_curso') {
-      viajeActivo = await Viaje.findOne({
-        ruta_id: ruta._id,
-        estado: 'activo'
-      });
+      viajeActivo = await Viaje.findOne({ ruta_id: ruta._id, estado: 'activo' });
     }
 
     return res.json({
       viaje: viajeActivo,
-      fase: fase === 'en_curso' ? 'activo' : fase
+      fase: fase === 'en_curso' ? 'activo' : (fase === 'jornada_completa' ? 'jornada_completa' : fase)
     });
   } catch (error) {
     console.error('Error al obtener el viaje activo del conductor:', error);
@@ -38,19 +35,15 @@ exports.getViajeActivoPadre = async (req, res) => {
   try {
     const Estudiante = require('../models/Estudiante');
     const Viaje = require('../models/Viaje');
+    const { calcularFaseRuta } = require('../utils/viajeHelper');
 
-    // Obtener los hijos del padre
     const parentId = req.user.id || req.user._id;
-    const hijos = await Estudiante.find({
-      padre_id: parentId
-    }).select('ruta_id conductor_id');
+    const hijos = await Estudiante.find({ padre_id: parentId }).select('ruta_id conductor_id');
 
     if (!hijos.length) {
       return res.json({ viaje: null, fase: 'sin_viaje' });
     }
 
-    // Si viene ruta_id como query param, usar ese
-    //    Si no, buscar en todas las rutas de los hijos
     const rutaIds = req.query.ruta_id
       ? [req.query.ruta_id]
       : hijos.map(h => h.ruta_id).filter(Boolean);
@@ -60,16 +53,12 @@ exports.getViajeActivoPadre = async (req, res) => {
     }
 
     const rutaId = rutaIds[0];
-
-    const { calcularFaseRuta } = require('../utils/viajeHelper');
     const fase = await calcularFaseRuta(rutaId);
 
     let viajeActivo = null;
     if (fase === 'en_curso') {
-      viajeActivo = await Viaje.findOne({
-        ruta_id: rutaId,
-        estado: 'activo'
-      }).populate('ruta_id', 'nombre_ruta zona horario_salida');
+      viajeActivo = await Viaje.findOne({ ruta_id: rutaId, estado: 'activo' })
+        .populate('ruta_id', 'nombre_ruta zona horario_salida');
     }
 
     res.json({ viaje: viajeActivo, fase });

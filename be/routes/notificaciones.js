@@ -36,46 +36,63 @@ function formatearNotificacion(notificacion, usuarioId) {
   };
 }
 
-async function obtenerAsistentesDelDia(conductor) {
-  const viaje = await Viaje.findOne({
-    conductor_id: conductor._id,
-    estado: 'en_curso',
-  }).sort({ createdAt: -1, hora_salida: -1 });
+async function obtenerAsistentesDelDia(conductor, chosenRutaId) {
+  let rutaId = chosenRutaId;
 
-  if (!viaje) {
+  if (!rutaId) {
+    const viaje = await Viaje.findOne({
+      conductor_id: conductor._id,
+      estado: { $in: ['activo', 'en_curso'] },
+    }).sort({ createdAt: -1, hora_salida: -1 });
+
+    rutaId = viaje ? viaje.ruta_id : null;
+  }
+
+  if (!rutaId) {
+    // Si no hay viaje activo, buscar la primera ruta activa del conductor
+    const Ruta = require('../models/Ruta');
+    const ruta = await Ruta.findOne({ conductor_id: conductor._id, estado: 'activa' });
+    if (ruta) {
+      rutaId = ruta._id;
+    }
+  }
+
+  if (!rutaId) {
     return { estudiantes: [], viajeId: null };
   }
 
-  const hijosIds = [...new Set((viaje.estudiantes_abordo || []).map(String))];
-  if (hijosIds.length === 0) {
-    return { estudiantes: [], viajeId: viaje._id };
-  }
-
   const estudiantes = await Estudiante.find({
-    _id: { $in: hijosIds },
+    ruta_id: rutaId,
     conductor_id: conductor._id,
     estado: 'Activo',
   })
     .select('_id nombre padre_id')
     .populate('padre_id', 'nombre apellido correo');
 
-  return { estudiantes, viajeId: viaje._id };
+  // Obtener el viaje id si existe para esta ruta específica
+  const viaje = await Viaje.findOne({
+    conductor_id: conductor._id,
+    ruta_id: rutaId,
+    estado: { $in: ['activo', 'en_curso'] },
+  }).sort({ createdAt: -1 });
+
+  return { estudiantes, viajeId: viaje ? viaje._id : null, rutaId };
 }
 
-async function obtenerDestinatarios(conductor, audiencia, estudianteId) {
-  if (audiencia === 'asistentes' || audiencia === 'individual') {
-    const { estudiantes, viajeId } = await obtenerAsistentesDelDia(conductor);
+async function obtenerDestinatarios(conductor, audiencia, estudianteId, chosenRutaId) {
+  if (audiencia === 'individual') {
+    const estudiante = await Estudiante.findById(estudianteId).populate('padre_id', 'nombre apellido correo');
+    if (!estudiante?.padre_id?._id) return { padresIds: [], hijosIds: [], viajeId: null };
 
-    if (audiencia === 'individual') {
-      const estudiante = estudiantes.find((item) => String(item._id) === String(estudianteId));
-      if (!estudiante?.padre_id?._id) return { padresIds: [], hijosIds: [], viajeId };
+    return {
+      padresIds: [estudiante.padre_id._id],
+      hijosIds: [estudiante._id],
+      viajeId: null,
+    };
+  }
 
-      return {
-        padresIds: [estudiante.padre_id._id],
-        hijosIds: [estudiante._id],
-        viajeId,
-      };
-    }
+  if (audiencia === 'asistentes') {
+    const { estudiantes, viajeId } = await obtenerAsistentesDelDia(conductor, chosenRutaId);
 
     const estudiantesConPadre = estudiantes.filter((estudiante) => estudiante.padre_id?._id);
     const padresIds = [...new Set(estudiantesConPadre.map((estudiante) => String(estudiante.padre_id._id)))];
@@ -86,10 +103,15 @@ async function obtenerDestinatarios(conductor, audiencia, estudianteId) {
     };
   }
 
-  const estudiantes = await Estudiante.find({
+  // Todos (de una ruta específica si se pasa chosenRutaId, sino de todas)
+  const filter = {
     conductor_id: conductor._id,
     estado: 'Activo',
-  }).select('_id padre_id');
+  };
+  if (chosenRutaId) {
+    filter.ruta_id = chosenRutaId;
+  }
+  const estudiantes = await Estudiante.find(filter).select('_id padre_id');
 
   return {
     padresIds: [...new Set(estudiantes.map((estudiante) => String(estudiante.padre_id)))],
@@ -106,14 +128,14 @@ router.get('/conductor/asistentes', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Acceso exclusivo para conductores' });
     }
 
-    const { estudiantes, viajeId } = await obtenerAsistentesDelDia(conductor);
+    const { estudiantes, viajeId, rutaId } = await obtenerAsistentesDelDia(conductor, req.query.ruta_id);
     const asistentes = estudiantes.filter((estudiante) => estudiante.padre_id?._id).map((estudiante) => ({
       _id: estudiante._id,
       nombre: estudiante.nombre,
       padre: estudiante.padre_id,
     }));
 
-    res.json({ asistentes, viaje_id: viajeId });
+    res.json({ asistentes, viaje_id: viajeId, ruta_id: rutaId });
   } catch (error) {
     res.status(500).json({ error: 'No se pudieron obtener los asistentes de hoy' });
   }
@@ -138,7 +160,7 @@ router.post('/conductor/enviar', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Selecciona un estudiante asistente' });
     }
 
-    const { padresIds, hijosIds, viajeId } = await obtenerDestinatarios(conductor, audiencia, estudianteId);
+    const { padresIds, hijosIds, viajeId } = await obtenerDestinatarios(conductor, audiencia, estudianteId, req.body.ruta_id);
     if (padresIds.length === 0) {
       const detalle = audiencia === 'todos'
         ? 'No hay padres vinculados a tu ruta'
@@ -160,27 +182,6 @@ router.post('/conductor/enviar', verifyToken, async (req, res) => {
       fecha: new Date(),
     });
 
-    // Enviar notificaciones push a cada padre destinatario
-    const { sendPushNotification } = require('../utils/notificaciones');
-    Usuario.find({ _id: { $in: padresIds } })
-      .then((destinatariosDocs) => {
-        destinatariosDocs.forEach((dest) => {
-          const token = dest.fcmToken || ((dest.fcm_token && dest.fcm_token.length > 0) ? dest.fcm_token[0] : null);
-          if (token) {
-            sendPushNotification({
-              token,
-              titulo: audiencia === 'emergencia' ? '⚠️ Alerta de Emergencia' : '🚌 Mensaje de BusWay',
-              mensaje: mensaje,
-              data: {
-                tipo: 'mensaje_conductor',
-                notificacionId: String(notificacion._id),
-              }
-            }).catch((err) => console.error('Error enviando push en /conductor/enviar:', err));
-          }
-        });
-      })
-      .catch((err) => console.error('Error al buscar destinatarios para push:', err));
-
     res.status(201).json({
       mensaje: 'Notificacion guardada correctamente',
       notificacion,
@@ -199,7 +200,7 @@ router.get('/conductor/historial', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Acceso exclusivo para conductores' });
     }
 
-    const notificaciones = await Notificacion.find({ conductor_id: conductor._id })
+    const notificaciones = await Notificacion.find({ conductor_id: conductor._id, tipo: { $ne: 'solicitud' } })
       .sort({ fecha: -1 })
       .limit(50)
       .populate('hijos_ids', 'nombre')
@@ -219,16 +220,10 @@ router.get('/padre', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Acceso exclusivo para padres' });
     }
 
-    const { estudiante_id } = req.query;
-    const query = { destinatarios: padre._id };
-    if (estudiante_id) {
-      query.hijos_ids = estudiante_id;
-    }
-
-    const notificaciones = await Notificacion.find(query)
+    const notificaciones = await Notificacion.find({ destinatarios: padre._id })
       .sort({ fecha: -1 })
       .limit(50)
-      .populate('conductor_id', 'nombre apellido correo')
+      .populate('conductor_id', 'nombre apellido correo telefono datos_conductor')
       .populate('hijos_ids', 'nombre padre_id');
 
     const datos = notificaciones.map((notificacion) => {
@@ -260,7 +255,7 @@ router.patch('/padre/:id/leida', verifyToken, async (req, res) => {
     const notificacion = await Notificacion.findOneAndUpdate(
       { _id: req.params.id, destinatarios: padre._id, 'lecturas.usuario_id': { $ne: padre._id } },
       { $push: { lecturas: { usuario_id: padre._id, fecha_lectura: new Date() } } },
-      { returnDocument: 'after' }
+      { new: true }
     );
 
     if (!notificacion) {
@@ -286,6 +281,87 @@ router.patch('/padre/marcar-leidas/todas', verifyToken, async (req, res) => {
     await Notificacion.updateMany(
       { destinatarios: padre._id, 'lecturas.usuario_id': { $ne: padre._id } },
       { $push: { lecturas: { usuario_id: padre._id, fecha_lectura: new Date() } } }
+    );
+
+    res.json({ mensaje: 'Notificaciones marcadas como leidas' });
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudieron marcar las notificaciones' });
+  }
+});
+
+router.get('/conductor/recibidas', verifyToken, async (req, res) => {
+  try {
+    const conductor = await usuarioAutenticado(req, res);
+    if (!conductor) return;
+    if (conductor.tipo !== 'conductor') {
+      return res.status(403).json({ error: 'Acceso exclusivo para conductores' });
+    }
+
+    const notificaciones = await Notificacion.find({
+      destinatarios: conductor._id,
+      tipo: 'solicitud',
+    })
+      .sort({ fecha: -1 })
+      .limit(50)
+      .populate({
+        path: 'hijos_ids',
+        select: 'nombre padre_id',
+        populate: {
+          path: 'padre_id',
+          select: 'nombre apellido correo telefono datos_padre'
+        }
+      });
+
+    const datos = notificaciones.map((notificacion) => {
+      return formatearNotificacion(notificacion, conductor._id);
+    });
+
+    res.json({
+      notificaciones: datos,
+      sinLeer: datos.filter((n) => !n.leida).length,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudieron obtener las notificaciones' });
+  }
+});
+
+router.patch('/conductor/:id/leida', verifyToken, async (req, res) => {
+  try {
+    const conductor = await usuarioAutenticado(req, res);
+    if (!conductor) return;
+    if (conductor.tipo !== 'conductor') {
+      return res.status(403).json({ error: 'Acceso exclusivo para conductores' });
+    }
+
+    const notificacion = await Notificacion.findOneAndUpdate(
+      { _id: req.params.id, destinatarios: conductor._id, 'lecturas.usuario_id': { $ne: conductor._id } },
+      { $push: { lecturas: { usuario_id: conductor._id, fecha_lectura: new Date() } } },
+      { new: true }
+    );
+
+    if (!notificacion) {
+      const existente = await Notificacion.findOne({ _id: req.params.id, destinatarios: conductor._id });
+      if (!existente) return res.status(404).json({ error: 'Notificacion no encontrada' });
+      return res.json({ notificacion: formatearNotificacion(existente, conductor._id) });
+    }
+
+    res.json({ notificacion: formatearNotificacion(notificacion, conductor._id) });
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo marcar como leida' });
+  }
+});
+
+router.patch('/conductor/marcar-leidas/todas', verifyToken, async (req, res) => {
+  try {
+    const conductor = await usuarioAutenticado(req, res);
+    if (!conductor) return;
+    if (conductor.tipo !== 'conductor') {
+      return res.status(403).json({ error: 'Acceso exclusivo para conductores' });
+    }
+
+    await Notificacion.updateMany(
+      { destinatarios: conductor._id, 'lecturas.usuario_id': { $ne: conductor._id } },
+      { $push: { lecturas: { usuario_id: conductor._id, fecha_lectura: new Date() } } }
     );
 
     res.json({ mensaje: 'Notificaciones marcadas como leidas' });

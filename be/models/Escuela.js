@@ -1,11 +1,13 @@
 const mongoose = require('mongoose');
 
 const escuelaSchema = new mongoose.Schema({
-  nombre: { type: String, required: true },
-  distrito: { type: String, required: true },
-  rutas: { type: Number, default: 0 },
+  nombre:      { type: String, required: true },
+  provincia:   { type: String, required: true },
+  distrito:    { type: String, required: true },
+  direccion:   { type: String, default: '' },
+  rutas:       { type: Number, default: 0 },
   conductores: { type: Number, default: 0 },
-  estado: { type: String, enum: ['Activa', 'Inactiva'], default: 'Activa' },
+  estado:      { type: String, enum: ['Activa', 'Inactiva'], default: 'Activa' },
   fecha_registro: { type: Date, default: Date.now },
 }, { versionKey: false });
 

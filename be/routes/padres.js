@@ -56,7 +56,7 @@ router.get('/mis-hijos', verifyToken, async (req, res) => {
 
     const hijos = await Estudiante.find({ padre_id: padre._id })
       .populate('conductor_id', 'nombre apellido correo')
-      .populate('ruta_id');
+      .populate('ruta_id', 'nombre escuela zona');
     res.json({ hijos });
   } catch (error) {
     res.status(500).json({ error: 'Error interno al obtener los hijos' });

@@ -186,7 +186,7 @@ router.patch('/usuarios/:id/estado', verifyToken, requireRole('administrador'), 
     const usuario = await Usuario.findOneAndUpdate(
       { _id: req.params.id, tipo: { $in: ['conductor', 'padre'] } },
       { estado },
-      { returnDocument: 'after' }
+      { new: true }
     );
     if (!usuario) return res.status(404).json({ error: 'Cuenta de conductor o padre no encontrada' });
     await Log.create({
@@ -200,33 +200,88 @@ router.patch('/usuarios/:id/estado', verifyToken, requireRole('administrador'), 
   }
 });
 
-// PATCH actualizar token FCM del usuario
-router.patch('/fcm-token', verifyToken, async (req, res) => {
+// Guardar ubicación del padre
+router.patch('/ubicacion', verifyToken, async (req, res) => {
   try {
-    const { fcmToken } = req.body;
-    if (fcmToken === undefined) {
-      return res.status(400).json({ error: 'fcmToken es obligatorio' });
-    }
-
-    const updateQuery = { fcmToken: fcmToken };
-    if (fcmToken) {
-      updateQuery.$addToSet = { fcm_token: fcmToken };
+    const { provincia, distrito, corregimiento } = req.body;
+    if (!provincia || !distrito || !corregimiento) {
+      return res.status(400).json({ error: 'Provincia, distrito y corregimiento son obligatorios' });
     }
 
     const usuario = await Usuario.findOneAndUpdate(
       { firebase_uid: req.user.uid },
-      updateQuery,
-      { returnDocument: 'after' }
+      { ubicacion: { provincia, distrito, corregimiento } },
+      { new: true }
     );
 
+    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    res.json({ mensaje: 'Ubicación guardada correctamente', ubicacion: usuario.ubicacion });
+  } catch (error) {
+    res.status(500).json({ error: 'Error interno al guardar la ubicación' });
+  }
+});
+
+// Actualizar información del perfil
+router.patch('/perfil/actualizar', verifyToken, async (req, res) => {
+  try {
+    const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
     if (!usuario) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    res.json({ mensaje: 'Token FCM actualizado correctamente', fcmToken: usuario.fcmToken });
+    const { nombre, apellido, foto_perfil, telefono, banco_info, vehiculo } = req.body;
+
+    if (nombre) usuario.nombre = nombre;
+    if (apellido) usuario.apellido = apellido;
+    if (foto_perfil !== undefined) usuario.foto_perfil = foto_perfil;
+    if (telefono !== undefined) {
+      usuario.telefono = telefono;
+      if (usuario.tipo === 'conductor') {
+        usuario.datos_conductor = {
+          ...(usuario.datos_conductor || {}),
+          telefono
+        };
+        usuario.markModified('datos_conductor');
+      }
+    }
+
+    if (usuario.tipo === 'conductor') {
+      if (banco_info !== undefined) {
+        usuario.datos_conductor = {
+          ...(usuario.datos_conductor || {}),
+          banco_info
+        };
+        usuario.markModified('datos_conductor');
+      }
+
+      if (vehiculo) {
+        const v = await Vehiculo.findOne({ conductor_id: usuario._id });
+        if (v) {
+          if (vehiculo.placa !== undefined) v.placa = vehiculo.placa;
+          if (vehiculo.marca !== undefined) v.marca = vehiculo.marca;
+          if (vehiculo.modelo !== undefined) v.modelo = vehiculo.modelo;
+          if (vehiculo.anio !== undefined) v.anio = vehiculo.anio;
+          if (vehiculo.num_asientos !== undefined) v.num_asientos = Number(vehiculo.num_asientos);
+          await v.save();
+        }
+      }
+    }
+
+    await usuario.save();
+
+    const usuarioRespuesta = usuario.toObject();
+    if (usuario.tipo === 'conductor') {
+      usuarioRespuesta.vehiculo = await Vehiculo.findOne({ conductor_id: usuario._id });
+    }
+
+    res.json({
+      mensaje: 'Perfil actualizado correctamente',
+      usuario: usuarioRespuesta,
+    });
   } catch (error) {
-    console.error('Error al actualizar token FCM:', error);
-    res.status(500).json({ error: 'Error interno del servidor al actualizar token FCM' });
+    console.error('Error actualizando perfil:', error);
+    res.status(500).json({ error: 'Error interno al actualizar el perfil' });
   }
 });
 
