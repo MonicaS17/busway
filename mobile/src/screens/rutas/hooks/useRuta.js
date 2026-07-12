@@ -17,6 +17,12 @@ export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRuta
   const [rutaSeleccionadaId, setRutaSeleccionadaId] = useState(null);
 
   useEffect(() => {
+    if (!esPadre && selectedRutaId && selectedRutaId !== rutaSeleccionadaId) {
+      setRutaSeleccionadaId(selectedRutaId);
+    }
+  }, [esPadre, selectedRutaId]);
+
+  useEffect(() => {
     if (!usuario) return;
 
     const loadData = async () => {

@@ -36,6 +36,7 @@ function ViajeActivoPadre({
   conductorInfo,
   hijos,
   hijoSeleccionado,
+  idsHijosRuta,
   pulso,
   bottomInset
 }) {
@@ -148,9 +149,9 @@ function ViajeActivoPadre({
     return fallback;
   };
 
-  const hijosAMostrar = hijos.filter(
-    h => String(h.id) === String(hijoSeleccionado?._id || hijoSeleccionado?.id)
-  );
+  const hijosAMostrar = idsHijosRuta
+    ? hijos.filter(h => idsHijosRuta.includes(String(h.id)))
+    : hijos.filter(h => String(h.id) === String(hijoSeleccionado?._id || hijoSeleccionado?.id));
 
   return (
     <ScrollView contentContainerStyle={[styles.body, { paddingBottom: bottomInset + 24 }]} showsVerticalScrollIndicator={false}>
