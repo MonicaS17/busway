@@ -4,22 +4,22 @@ const mongoose = require('mongoose'); // ODM para MongoDB
 const cors = require('cors'); // Middleware para manejar CORS
 require('dotenv').config(); // Cargar variables de entorno
 
-// Importación de Rutas
+// Importación de Sockets e HTTP
 const http = require('http');
 const { Server } = require('socket.io');
 
-// Importación de Rutas (Unificado con la limpieza de origin/main)
+// Importación de Rutas
 const authRoutes = require('./routes/auth');
 const viajesRoutes = require('./routes/viajes');
-const conductorRoutes = require('./routes/conductor'); // origin/main: ya no necesita .router
-const padresRoutes = require('./routes/padres');
 const escuelasRoutes = require('./routes/escuelas');
 const pagosRoutes = require('./routes/pagos');
+const conductorRoutes = require('./routes/conductor'); 
+const padresRoutes = require('./routes/padres');
 const adminRoutes = require('./routes/admin');
 const notificacionesRoutes = require('./routes/notificaciones');
-
-// socketHandler para manejar eventos de Socket.IO (asistencia y GPS)
-const socketHandler = require('./sockets/socketHandler');
+const stripeRoutes = require('./routes/stripe');
+const solicitudesRoutes = require('./routes/solicitudes');
+const acuerdosRoutes = require('./routes/acuerdos');
 
 const app = express();
 
@@ -34,8 +34,22 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-// Mantener origin/main: añade límite seguro para peticiones JSON
-app.use(express.json({ limit: '1mb' })); 
+
+// Cabeceras de seguridad para mitigar riesgos (OWASP ZAP)
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
+// Stripe webhook necesita el body raw (sin procesar) para verificar la firma
+// DEBE ir antes de express.json() para que no convierta el body a objeto
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+
+app.use(express.json({ limit: '1mb' })) 
 
 // Rutas base de la API
 app.use('/api/auth', authRoutes);
@@ -46,20 +60,23 @@ app.use('/api/escuelas', escuelasRoutes);
 app.use('/api/pagos', pagosRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notificaciones', notificacionesRoutes);
+app.use('/api/stripe', stripeRoutes);
+app.use('/api/solicitudes', solicitudesRoutes);
+app.use('/api/acuerdos', acuerdosRoutes);
 
 // Ruta de prueba
 app.get('/', (req, res) => {
   res.json({ mensaje: 'Backend BusWay funcionando con Sockets y Rutas de Viajes habilitadas 🚀' });
 });
 
-// Mantener HEAD: Inicialización del socketHandler para asistencia y GPS
+// Inicialización del socketHandler real
+const socketHandler = require('./sockets/socketHandler');
 socketHandler(io);
 
-// Conexión a MongoDB y Arranque del Servidor (Combinado con logs elegantes de main)
+// Conexión a MongoDB y Arranque del Servidor
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('✅ Conectado exitosamente a MongoDB');
-    // CORRECCIÓN CLAVE: Usar 'server.listen' (HEAD) en lugar de 'app.listen' (main)
     server.listen(process.env.PORT, () => {
       console.log(`🚀 Servidor corriendo en puerto ${process.env.PORT}`);
     });
