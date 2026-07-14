@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const asistenciaSchema = new mongoose.Schema({
   hijo_id: { type: mongoose.Schema.Types.ObjectId, ref: 'estudiantes', required: true },
-  tipo: { type: String, enum: ['subida', 'bajada'], required: true },
+  tipo: { type: String, enum: ['subida', 'bajada', 'pendiente', 'ausente', 'abordo', 'entregado'], required: true },
   metodo_registro: { type: String, enum: ['qr', 'manual'], required: true },
   fecha_hora: { type: Date, required: true },
   latitud: Number,

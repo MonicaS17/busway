@@ -33,8 +33,8 @@ function reconstruirIndiceActual(estudiantes, asistencias) {
   return primerPendiente === -1 ? estudiantes.length : primerPendiente;
 }
 
-export default function useViaje({ usuario, esPadre }) {
-  const rutaData = useRuta({ usuario, esPadre });
+export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRutaId }) {
+  const rutaData = useRuta({ usuario, esPadre, selectedHijoId, selectedRutaId });
 
   // Conductor state
   const [currentStep, setCurrentStep] = useState('PRE_TRIP');
@@ -145,6 +145,20 @@ export default function useViaje({ usuario, esPadre }) {
     }
   }, [rutaData.loading, rutaData.estudiantes, rutaData.hijos, rutaData.activeTripInitial, esPadre, rutaData.faseViaje]);
 
+  // Resetear estado del viaje al cambiar de hijo/ruta seleccionado (evita mostrar el estado del hijo anterior mientras carga el nuevo)
+  useEffect(() => {
+    if (!esPadre) return;
+    setRutaActiva(false);
+    setFaseViaje('sin_viaje');
+    setCoordenadasBus({
+      latitude: 8.9833,
+      longitude: -79.5167,
+      latitudeDelta: 0.006,
+      longitudeDelta: 0.006,
+    });
+    setHijos([]);
+  }, [selectedHijoId, selectedRutaId, esPadre]);
+
   // ─── CONEXIÓN A SOCKET Y ESCUCHA DE EVENTOS ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (rutaData.loading || !rutaData.rutaInfo?._id) return;
@@ -154,11 +168,14 @@ export default function useViaje({ usuario, esPadre }) {
 
     socketClient.on('connect', () => {
       if (esPadre) {
-        const firstChild = rutaData.hijos[0];
+        const activeHijo = rutaData.hijos.find(h => String(h._id) === String(selectedHijoId)) || rutaData.hijos[0];
+        const activeRutaId = (activeHijo?.ruta_id && typeof activeHijo.ruta_id === 'object')
+          ? activeHijo.ruta_id._id
+          : (activeHijo?.ruta_id || rutaData.rutaInfo._id);
         socketClient.emit('join:ruta', {
-          id_ruta: rutaData.rutaInfo._id,
+          id_ruta: activeRutaId,
           rol: 'padre',
-          id_estudiante: firstChild?._id
+          id_estudiante: activeHijo?._id
         });
       } else {
         socketClient.emit('join:ruta', { id_ruta: rutaData.rutaInfo._id, rol: 'conductor' });
@@ -251,7 +268,7 @@ export default function useViaje({ usuario, esPadre }) {
     return () => {
       socketClient.disconnect();
     };
-  }, [rutaData.loading, rutaData.rutaInfo?._id, rutaData.hijos, esPadre]);
+  }, [rutaData.loading, rutaData.rutaInfo?._id, rutaData.hijos, esPadre, selectedHijoId]);
 
   // ─── SEGUIMIENTO GPS DEL CONDUCTOR ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -307,7 +324,9 @@ export default function useViaje({ usuario, esPadre }) {
       try {
         const token = rutaData.token; // token provisto por useRuta
         if (!token) return;
-        const resp = await fetch(`${BACKEND_URL}/api/viajes/activo/padre`, {
+        const hijoIdParaFetch = selectedHijoId || rutaData.hijos[0]?._id || '';
+        const rutaIdParaFetch = selectedRutaId || rutaData.rutaInfo?._id || '';
+        const resp = await fetch(`${BACKEND_URL}/api/viajes/activo/padre?estudiante_id=${hijoIdParaFetch}&ruta_id=${rutaIdParaFetch}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!resp.ok) return;
@@ -339,7 +358,7 @@ export default function useViaje({ usuario, esPadre }) {
     });
 
     return () => subscription.remove();
-  }, [esPadre, rutaData.token]);
+  }, [esPadre, rutaData.token, selectedHijoId, selectedRutaId]);
 
   // ─── FUNCIONES DE ACCIÓN ─────────────────────────────────────────────────────────
 
@@ -521,6 +540,7 @@ export default function useViaje({ usuario, esPadre }) {
     faseViaje,        // expuesto para la pantalla del padre
     coordenadasBus,
     hijos,
+    rawHijos: rutaData.hijos,
     marcarEstado,
     handleQRScanned,
     handleParentQRScanned,

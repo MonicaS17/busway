@@ -35,11 +35,28 @@ function ViajeActivoPadre({
   rutaInfo,
   conductorInfo,
   hijos,
+  hijoSeleccionado,
+  idsHijosRuta,
   pulso,
   bottomInset
 }) {
-  const firstChild = hijos[0];
-  const estadoHijo = firstChild?.estado || 'pendiente';
+  const firstChild = hijos.find(h => String(h.id) === String(hijoSeleccionado?._id || hijoSeleccionado?.id));
+
+  const mapRef = useRef(null);
+  useEffect(() => {
+    if (rutaActiva && mapRef.current) {
+      mapRef.current.animateToRegion(coordenadasBus, 800);
+    }
+  }, [coordenadasBus, rutaActiva]);
+
+  if (!firstChild) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <Text style={{ color: '#888', textAlign: 'center' }}>Cargando información del estudiante...</Text>
+      </View>
+    );
+  }
+  const estadoHijo = firstChild.estado || 'pendiente';
 
   //Mapeo de estados visuales para la pantalla del padre
   let estadoVisual = 'esperando_ida';
@@ -123,21 +140,18 @@ function ViajeActivoPadre({
     activo: false
   };
 
-  const mapRef = useRef(null);
   const coordenadasHijo = firstChild?.latitud && firstChild?.longitud
     ? { latitude: Number(firstChild.latitud), longitude: Number(firstChild.longitud) }
     : { latitude: 8.9833, longitude: -79.5167 };
-
-  useEffect(() => {
-    if (rutaActiva && mapRef.current) {
-      mapRef.current.animateToRegion(coordenadasBus, 800);
-    }
-  }, [coordenadasBus, rutaActiva]);
 
   const getSafeText = (value, fallback = '') => {
     if (typeof value === 'string') return value.trim() || fallback;
     return fallback;
   };
+
+  const hijosAMostrar = idsHijosRuta
+    ? hijos.filter(h => idsHijosRuta.includes(String(h.id)))
+    : hijos.filter(h => String(h.id) === String(hijoSeleccionado?._id || hijoSeleccionado?.id));
 
   return (
     <ScrollView contentContainerStyle={[styles.body, { paddingBottom: bottomInset + 24 }]} showsVerticalScrollIndicator={false}>
@@ -178,7 +192,7 @@ function ViajeActivoPadre({
             </MapView>
             <View style={styles.mapaFooter}>
               <Ionicons name="information-circle-outline" size={14} color="#888" />
-              <Text style={styles.mapaFooterText}>Actualización GPS cada 5 segundos · Socket.io</Text>
+              <Text style={styles.mapaFooterText}>Conexión segura y en vivo</Text>
             </View>
           </View>
         </>
@@ -226,7 +240,7 @@ function ViajeActivoPadre({
 
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Estado de tus hijos</Text>
       <View style={styles.infoCard}>
-        {hijos.map((hijo, i) => {
+        {hijosAMostrar.map((hijo, i) => {
           const cfg = {
             pendiente: { color: '#F59E0B', bg: '#FFF8E1', icon: 'time-outline', texto: 'Pendiente' },
             abordo:    { color: '#16A34A', bg: '#E6F9EE', icon: 'checkmark-circle-outline', texto: 'A bordo' },
@@ -235,7 +249,7 @@ function ViajeActivoPadre({
           }[hijo.estado] || { color: '#888', bg: '#F5F5F5', icon: 'help-circle-outline', texto: hijo.estado };
 
           return (
-            <View key={hijo.id} style={[styles.hijoEstadoRow, i < hijos.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}>
+            <View key={hijo.id} style={[styles.hijoEstadoRow, i < hijosAMostrar.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}>
               <View style={styles.hijoAvatar}><Text style={styles.hijoAvatarText}>{hijo.nombre.charAt(0).toUpperCase()}</Text></View>
               <Text style={styles.hijoNombre}>{hijo.nombre}</Text>
               <View style={[styles.estadoChip, { backgroundColor: cfg.bg }]}>

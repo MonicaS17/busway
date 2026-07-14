@@ -333,7 +333,11 @@ router.delete('/ruta/:rutaId', verifyToken, async (req, res) => {
 // GET ruta de un conductor por su ID (usado por padres)
 router.get('/:id/ruta', verifyToken, async (req, res) => {
   try {
-    const ruta = await Ruta.findOne({ conductor_id: req.params.id }).populate('escuela_id');
+    const filter = { conductor_id: req.params.id };
+    if (req.query.ruta_id) {
+      filter._id = req.query.ruta_id;
+    }
+    const ruta = await Ruta.findOne(filter).populate('escuela_id');
     if (!ruta) return res.json({ ruta: null, mensaje: 'El conductor no tiene una ruta asignada actualmente.' });
 
     const doc = ruta.toObject();

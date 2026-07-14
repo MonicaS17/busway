@@ -16,9 +16,9 @@ const navLinks = [
 function LogoMark() {
   return (
     <div className="mb-3 flex items-center gap-4">
-      <span className="relative h-12 w-12 overflow-hidden rounded-full">
-        <Image src="/logo.jpg" alt="BusWay" fill sizes="40px" className="object-cover" />
-      </span>
+      <div className="relative h-12 w-12 overflow-hidden rounded-full">
+        <Image src="/logo.jpg" alt="BusWay" fill sizes="48px" className="w-full h-full object-cover" />
+      </div>
 
       <div className="flex flex-col justify-center">
         <p className="text-xl font-extrabold text-navy">

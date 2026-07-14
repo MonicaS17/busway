@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { auth } from '../../../config/firebase';
 import api from '../../../config/api';
 
-export default function useRuta({ usuario, esPadre }) {
+export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRutaId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [rutaInfo, setRutaInfo] = useState(null);
@@ -15,6 +15,12 @@ export default function useRuta({ usuario, esPadre }) {
 
   const [rutas, setRutas] = useState([]);
   const [rutaSeleccionadaId, setRutaSeleccionadaId] = useState(null);
+
+  useEffect(() => {
+    if (!esPadre && selectedRutaId && selectedRutaId !== rutaSeleccionadaId) {
+      setRutaSeleccionadaId(selectedRutaId);
+    }
+  }, [esPadre, selectedRutaId]);
 
   useEffect(() => {
     if (!usuario) return;
@@ -48,13 +54,32 @@ export default function useRuta({ usuario, esPadre }) {
           const hijosObtenidos = resHijos.data.hijos;
           setHijos(hijosObtenidos);
 
-          const firstChild = hijosObtenidos[0];
-          const condId = firstChild.conductor_id && typeof firstChild.conductor_id === 'object'
-            ? firstChild.conductor_id._id
-            : firstChild.conductor_id;
+          let activeHijo = null;
+          if (selectedHijoId) {
+            activeHijo = hijosObtenidos.find(
+              (h) => String(h._id) === String(selectedHijoId) || String(h.id) === String(selectedHijoId)
+            );
+          }
+          if (!activeHijo) {
+            activeHijo = hijosObtenidos[0];
+          }
+
+          const activeRutaId = activeHijo.ruta_id && typeof activeHijo.ruta_id === 'object'
+            ? activeHijo.ruta_id._id
+            : activeHijo.ruta_id;
+
+          const condId = activeHijo.conductor_id && typeof activeHijo.conductor_id === 'object'
+            ? activeHijo.conductor_id._id
+            : activeHijo.conductor_id;
 
           if (!condId) {
             setError('Este estudiante no tiene un conductor asignado actualmente.');
+            setLoading(false);
+            return;
+          }
+
+          if (!activeRutaId) {
+            setError('Este estudiante no tiene una ruta asignada actualmente.');
             setLoading(false);
             return;
           }
@@ -74,7 +99,7 @@ export default function useRuta({ usuario, esPadre }) {
           // Obtener ruta del conductor
           let rInfo = null;
           try {
-            const resRuta = await api.get(`/api/conductor/${condId}/ruta`, {
+            const resRuta = await api.get(`/api/conductor/${condId}/ruta?ruta_id=${activeRutaId}`, {
               headers: { Authorization: `Bearer ${idToken}` }
             });
             if (resRuta.data && resRuta.data.ruta) {
@@ -93,7 +118,7 @@ export default function useRuta({ usuario, esPadre }) {
 
           // Obtener viaje activo con nueva estructura { viaje, fase }
           try {
-            const resViaje = await api.get('/api/viajes/activo/padre', {
+            const resViaje = await api.get(`/api/viajes/activo/padre?estudiante_id=${activeHijo._id}&ruta_id=${activeRutaId}`, {
               headers: { Authorization: `Bearer ${idToken}` }
             });
             const respData = resViaje.data;
@@ -178,7 +203,7 @@ export default function useRuta({ usuario, esPadre }) {
     };
 
     loadData();
-  }, [usuario, esPadre, rutaSeleccionadaId]);
+  }, [usuario, esPadre, rutaSeleccionadaId, selectedHijoId, selectedRutaId]);
 
 
   return {

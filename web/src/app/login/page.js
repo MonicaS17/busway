@@ -131,9 +131,9 @@ export default function LoginPage() {
       <div className="grid min-h-[calc(100vh-65px)] w-full lg:grid-cols-2">
         <section className="flex bg-navy px-10 py-10 text-white md:px-16">
           <div className="flex w-full flex-col items-center justify-center text-center">
-            <span className="relative block h-44 w-44 overflow-hidden rounded-full border-4 border-busway-blue md:h-72 md:w-72">
-              <Image src="/logo.jpg" alt="BusWay" fill sizes="288px" className="object-cover" priority />
-            </span>
+            <div className="relative h-44 w-44 overflow-hidden rounded-full border-4 border-busway-blue md:h-72 md:w-72">
+              <Image src="/logo.jpg" alt="BusWay" fill sizes="288px" className="w-full h-full object-cover" priority />
+            </div>
             <h1 className="mt-5 text-6xl font-black tracking-tight">
               Bus<span className="text-busway-blue">Way</span>
             </h1>

@@ -40,7 +40,7 @@ export default function RutaScreen({ navigation, route }) {
         {/* Card blanca */}
         <View style={styles.card}>
           {esPadre
-            ? <RutaPadre navigation={navigation} usuario={usuario} />
+            ? <RutaPadre navigation={navigation} usuario={usuario} route={route} />
             : <RutaConductor navigation={navigation} usuario={usuario} />
           }
         </View>
@@ -49,18 +49,40 @@ export default function RutaScreen({ navigation, route }) {
   );
 }
 
+function turnoLabel(horaStr, sufijo) {
+  const match = horaStr && horaStr.match(/\b(AM|PM)\b/i);
+  if (!match) return sufijo;
+  const turno = match[1].toUpperCase() === 'PM' ? 'Tarde' : 'Mañana';
+  return `${turno} (${sufijo})`;
+}
+
 //  ── VISTA PADRE ──────────────────────────────────────────
-function RutaPadre({ navigation, usuario }) {
+function RutaPadre({ navigation, usuario, route }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [ruta, setRuta] = useState(null);
+  const [hijos, setHijos] = useState([]);
+  const [hijoSeleccionado, setHijoSeleccionado] = useState(null);
+  const [mostrarGrid, setMostrarGrid] = useState(false);
+
+  const uniqueRutas = useMemo(() => Array.from(new Set(
+    hijos.map(h => h.ruta_id?._id?.toString() || h.ruta_id?.toString()).filter(Boolean)
+  )), [hijos]);
+
+  // TODO: revisar si sigue siendo necesario tras quitar navigation.navigate('Ruta', { hijoSeleccionado })
+  useEffect(() => {
+    if (route?.params?.hijoSeleccionado) {
+      setHijoSeleccionado(route.params.hijoSeleccionado);
+      setMostrarGrid(false);
+    }
+  }, [route?.params?.hijoSeleccionado]);
 
   useEffect(() => {
-    const fetchPadreRuta = async () => {
+    const cargarHijos = async () => {
       try {
         setLoading(true);
         setError('');
-        
+
         if (!auth.currentUser) {
           setError('Por favor, inicia sesión para continuar.');
           setLoading(false);
@@ -68,8 +90,6 @@ function RutaPadre({ navigation, usuario }) {
         }
 
         const token = await auth.currentUser.getIdToken();
-
-        // 1. Obtener hijos del padre
         const resHijos = await api.get('/api/padre/mis-hijos', {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -80,18 +100,52 @@ function RutaPadre({ navigation, usuario }) {
           return;
         }
 
-        const firstChild = resHijos.data.hijos[0];
-        const condId = firstChild.conductor_id && typeof firstChild.conductor_id === 'object'
-          ? firstChild.conductor_id._id
-          : firstChild.conductor_id;
-        
+        const lista = resHijos.data.hijos;
+        setHijos(lista);
+
+        if (!hijoSeleccionado && !route?.params?.hijoSeleccionado) {
+          setHijoSeleccionado(lista[0]);
+        }
+        setMostrarGrid(false);
+      } catch (error) {
+        console.error('Error cargando hijos:', error);
+        setError('Error al conectar con el servidor.');
+        setLoading(false);
+      }
+    };
+
+    cargarHijos();
+
+    const unsubscribe = navigation.addListener('focus', () => {
+      cargarHijos();
+    });
+
+    return unsubscribe;
+  }, [navigation, usuario]);
+
+  useEffect(() => {
+    if (!hijoSeleccionado?._id) return;
+
+    const cargarDatosConductorYRuta = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const condId = hijoSeleccionado.conductor_id && typeof hijoSeleccionado.conductor_id === 'object'
+          ? hijoSeleccionado.conductor_id._id
+          : hijoSeleccionado.conductor_id;
+        const activeRutaId = hijoSeleccionado.ruta_id && typeof hijoSeleccionado.ruta_id === 'object'
+          ? hijoSeleccionado.ruta_id._id
+          : hijoSeleccionado.ruta_id;
+
         if (!condId) {
           setRuta(null);
           setLoading(false);
           return;
         }
 
-        // 1.5 Obtener acuerdo activo del padre
+        const token = await auth.currentUser.getIdToken();
+
         let activeAgreement = null;
         try {
           const resAcuerdo = await api.get('/api/acuerdos/mis-acuerdos', {
@@ -104,7 +158,6 @@ function RutaPadre({ navigation, usuario }) {
           console.log('Error fetching active agreement:', err.message);
         }
 
-        // 2. Obtener el perfil y vehículo del conductor
         let condInfo = null;
         let vehiculoInfo = null;
         try {
@@ -119,10 +172,9 @@ function RutaPadre({ navigation, usuario }) {
           console.log('Error al buscar perfil del conductor:', err.message);
         }
 
-        // 3. Obtener la ruta del conductor
         let rutaInfo = null;
         try {
-          const resRuta = await api.get(`/api/conductor/${condId}/ruta`, {
+          const resRuta = await api.get(`/api/conductor/${condId}/ruta?ruta_id=${activeRutaId}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           if (resRuta.data && resRuta.data.ruta) {
@@ -138,19 +190,32 @@ function RutaPadre({ navigation, usuario }) {
           return;
         }
 
-        // Mapear hijos en esta ruta
-        const hijosList = resHijos.data.hijos.map(h => ({
-          id: h._id,
-          nombre: h.nombre,
-          estado: h.estado || 'Activo'
-        }));
+        const destinoEscuela = rutaInfo.escuela_id
+          ? (typeof rutaInfo.escuela_id === 'object' ? (rutaInfo.escuela_id.nombre || rutaInfo.escuela) : rutaInfo.escuela)
+          : (rutaInfo.escuela || 'Escuela asignada');
 
-        const destinoEscuela = rutaInfo.escuela_id ? (typeof rutaInfo.escuela_id === 'object' ? (rutaInfo.escuela_id.nombre || rutaInfo.escuela) : rutaInfo.escuela) : (rutaInfo.escuela || 'Escuela asignada');
-        // Mapear paradas de forma dinámica basada en el origen y destino
         const paradasIdaList = [
-          { descripcion: `Punto de recogida — Hogar de ${firstChild.nombre}`, hora: rutaInfo.horario?.split('—')[0]?.trim() || '6:30 AM' },
+          { descripcion: `Punto de recogida — Tu hogar`, hora: rutaInfo.horario?.split('—')[0]?.trim() || '6:30 AM' },
           { descripcion: `Destino — ${destinoEscuela}`, hora: rutaInfo.horario?.split('—')[1]?.trim() || '7:15 AM' }
         ];
+        const paradasVueltaList = [
+          { descripcion: `Punto de recogida — ${destinoEscuela}`, hora: 'Salida de clases' },
+          { descripcion: `Destino — Tu hogar`, hora: 'Retorno a casa' }
+        ];
+
+        const formatFrecuencia = (frec) => {
+          if (!frec) return 'Lunes a Viernes';
+          if (typeof frec === 'string') return frec;
+          if (Array.isArray(frec)) {
+            const hasLaV = frec.length === 5 &&
+              frec.includes('Lunes') && frec.includes('Martes') &&
+              frec.includes('Miércoles') && frec.includes('Jueves') && frec.includes('Viernes');
+            if (hasLaV) return 'Lunes a Viernes';
+            if (frec.length === 7) return 'Todos los días';
+            return frec.join(', ');
+          }
+          return 'Lunes a Viernes';
+        };
 
         const paradasVueltaList = [
           { descripcion: `Punto de recogida — ${destinoEscuela}`, hora: 'Salida de clases' },
@@ -194,25 +259,24 @@ function RutaPadre({ navigation, usuario }) {
           totalMeses: activeAgreement ? activeAgreement.total_meses : 10,
           paradasIda: paradasIdaList,
           paradasVuelta: paradasVueltaList,
-          hijos: hijosList,
+          rutaIdActiva: activeRutaId != null ? String(activeRutaId) : null,
+          hijos: hijos.map(h => ({
+            id: h._id,
+            nombre: h.nombre,
+            estado: h.estado || 'Activo',
+            ruta_id: h.ruta_id?._id?.toString() || h.ruta_id?.toString() || null,
+          })),
         });
-
       } catch (error) {
-        console.error('Error cargando ruta padre:', error);
+        console.error('Error cargando datos de conductor/ruta:', error);
         setError('Error al conectar con el servidor.');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchPadreRuta();
-
-    const unsubscribe = navigation.addListener('focus', () => {
-      fetchPadreRuta();
-    });
-
-    return unsubscribe;
-  }, [navigation, usuario]);
+    cargarDatosConductorYRuta();
+  }, [hijoSeleccionado?._id]);
 
   if (loading) {
     return (
@@ -235,6 +299,8 @@ function RutaPadre({ navigation, usuario }) {
     );
   }
 
+  if (!hijoSeleccionado) return null;
+
   if (!ruta) {
     return (
       <EstadoVacio
@@ -248,11 +314,57 @@ function RutaPadre({ navigation, usuario }) {
   }
 
   const progreso = (ruta.mesActual / ruta.totalMeses) * 100;
+  const mostrarSelectorHijos = hijos.length > 1 && uniqueRutas.length > 1;
+  const hijosEnEstaRuta = uniqueRutas.length > 1
+    ? ruta.hijos.filter(h => h.ruta_id === ruta.rutaIdActiva)
+    : ruta.hijos;
+  const gruposPorRuta = uniqueRutas.map(rutaId => {
+    const hijosDeRuta = hijos.filter(h => (h.ruta_id?._id?.toString() || h.ruta_id?.toString()) === rutaId);
+    return { rutaId, representante: hijosDeRuta[0], extra: hijosDeRuta.length - 1 };
+  });
 
   return (
     <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      {/* Selector de hijos (chips) */}
+      {mostrarSelectorHijos && (
+        <>
+          <Text style={styles.sectionLabel}>Rutas de tus hijos asignados</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.hijosChipsRow}
+          >
+            {gruposPorRuta.map((grupo) => {
+              const hijo = grupo.representante;
+              const seleccionado = hijoSeleccionado?._id === hijo._id;
+              return (
+                <TouchableOpacity
+                  key={grupo.rutaId}
+                  style={[styles.hijoChip, seleccionado && styles.hijoChipSeleccionado]}
+                  onPress={() => setHijoSeleccionado(hijo)}
+                >
+                  <View style={[styles.hijoAvatar, seleccionado && styles.hijoChipAvatarSeleccionado]}>
+                    <Text style={[styles.hijoAvatarText, seleccionado && styles.hijoChipAvatarTextSeleccionado]}>
+                      {hijo.nombre.charAt(0)}
+                    </Text>
+                    {grupo.extra > 0 && (
+                      <View style={styles.hijoChipExtraBadge}>
+                        <Text style={styles.hijoChipExtraBadgeText}>+{grupo.extra}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.hijoChipNombre, seleccionado && styles.hijoChipNombreSeleccionado]}>
+                    {hijo.nombre}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </>
+      )}
+
       {/* Tarjeta del conductor */}
-      <Text style={styles.sectionLabel}>Conductor asignado</Text>
+      <Text style={[styles.sectionLabel, { marginTop: mostrarSelectorHijos ? 20 : 0 }]}>Conductor asignado</Text>
       <View style={styles.conductorCard}>
         <View style={styles.conductorCardTop}>
           <View style={styles.avatarGrande}>
@@ -323,13 +435,13 @@ function RutaPadre({ navigation, usuario }) {
 
       {/* Hijos en esta ruta */}
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-        {ruta.hijos.length === 1 ? 'Hijo en esta ruta' : 'Hijos en esta ruta'}
+        {hijosEnEstaRuta.length === 1 ? 'Hijo en esta ruta' : 'Hijos en esta ruta'}
       </Text>
       <View style={styles.infoCard}>
-        {ruta.hijos.map((hijo, i) => (
+        {hijosEnEstaRuta.map((hijo, i) => (
           <View
             key={hijo.id}
-            style={[styles.hijoRow, i < ruta.hijos.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}
+            style={[styles.hijoRow, i < hijosEnEstaRuta.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }]}
           >
             <View style={styles.hijoAvatar}>
               <Text style={styles.hijoAvatarText}>{hijo.nombre.charAt(0)}</Text>
@@ -348,7 +460,7 @@ function RutaPadre({ navigation, usuario }) {
       <View style={{ gap: 12 }}>
         {/* Recorrido de Ida */}
         <View style={styles.paradasCard}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#888', marginBottom: 12, textTransform: 'uppercase' }}>Mañana (Ida)</Text>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#888', marginBottom: 12, textTransform: 'uppercase' }}>{turnoLabel(ruta.paradasIda[0]?.hora, 'Ida')}</Text>
           {ruta.paradasIda.map((parada, i) => {
             const esUltima = i === ruta.paradasIda.length - 1;
             const esPrimera = i === 0;
@@ -375,7 +487,7 @@ function RutaPadre({ navigation, usuario }) {
 
         {/* Recorrido de Vuelta */}
         <View style={styles.paradasCard}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#888', marginBottom: 12, textTransform: 'uppercase' }}>Tarde (Vuelta)</Text>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#888', marginBottom: 12, textTransform: 'uppercase' }}>{turnoLabel(ruta.paradasVuelta[0]?.hora, 'Vuelta')}</Text>
           {ruta.paradasVuelta.map((parada, i) => {
             const esUltima = i === ruta.paradasVuelta.length - 1;
             const esPrimera = i === 0;
@@ -628,7 +740,7 @@ function RutaConductor({ navigation, usuario }) {
         id: e._id,
         nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
         zona: e.zona || 'Arraiján',
-        escuela: e.escuela || (resRuta.data?.ruta?.escuela_id ? (typeof resRuta.data.ruta.escuela_id === 'object' ? resRuta.data.ruta.escuela_id.nombre : resRuta.data.ruta.escuela) : (resRuta.data?.ruta?.escuela || 'Colegio San Agustín')),
+        escuela: e.escuela || (resRuta.data?.ruta?.escuela_id ? (typeof resRuta.data.ruta.escuela_id === 'object' ? resRuta.data.ruta.escuela_id.nombre : resRuta.data.ruta.escuela) : (resRuta.data?.ruta?.escuela || 'Colegio')),
         ruta_id: e.ruta_id && typeof e.ruta_id === 'object' ? e.ruta_id._id : (e.ruta_id || null),
         inputPos: (idx + 1).toString(),
       }));
@@ -1301,7 +1413,7 @@ function RutaConductor({ navigation, usuario }) {
           {/* Botón iniciar ruta */}
           <TouchableOpacity
             style={styles.btnIniciar}
-            onPress={() => navigation.navigate('Viaje', { usuario })}
+            onPress={() => navigation.navigate('Viaje', { usuario, ruta_id: rutaSeleccionada.id })}
           >
             <Ionicons name="play-circle" size={20} color="#0D1B3E" />
             <Text style={styles.btnIniciarText}>Iniciar Ruta en Tiempo Real</Text>
@@ -1486,6 +1598,17 @@ const styles = StyleSheet.create({
   estadoActivoBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#E6F9EE', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20 },
   estadoPunto: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#16A34A' },
   estadoActivoText: { fontSize: 11, fontWeight: '700', color: '#16A34A' },
+
+  // Selector de hijos (chips)
+  hijosChipsRow: { flexDirection: 'row', gap: 10, paddingBottom: 4, paddingRight: 4 },
+  hijoChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F5F8FC', borderWidth: 1.5, borderColor: '#E3ECF7', borderRadius: 24, paddingVertical: 6, paddingHorizontal: 12 },
+  hijoChipSeleccionado: { backgroundColor: '#0D1B3E', borderColor: '#0D1B3E' },
+  hijoChipNombre: { fontSize: 14, fontWeight: '600', color: '#0D1B3E' },
+  hijoChipNombreSeleccionado: { color: '#fff' },
+  hijoChipAvatarSeleccionado: { backgroundColor: '#fff' },
+  hijoChipAvatarTextSeleccionado: { color: '#0D1B3E' },
+  hijoChipExtraBadge: { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#0D1B3E', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: '#fff' },
+  hijoChipExtraBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
 
   // Paradas
   paradasCard: { backgroundColor: '#F5F8FC', borderRadius: 18, borderWidth: 1.5, borderColor: '#E3ECF7', padding: 16, marginBottom: 4 },
