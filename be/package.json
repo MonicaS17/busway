@@ -6,7 +6,10 @@
 "scripts": {
   "test": "jest",
   "test:watch": "jest --watch",
-  "test:coverage": "jest --coverage"
+  "test:coverage": "jest --coverage",
+  "perf:load": "k6 run performance/load-test.js",
+  "perf:stress": "k6 run performance/stress-test.js",
+  "perf:spike": "k6 run performance/spike-test.js"
 },
   "keywords": [],
   "author": "",
