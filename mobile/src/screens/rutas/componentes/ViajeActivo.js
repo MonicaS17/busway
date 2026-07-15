@@ -187,7 +187,15 @@ function ViajeActivoPadre({
               </Marker>
 
               {/* Escuela */}
-              <Marker coordinate={{ latitude: 8.9975, longitude: -79.5240 }} title={rutaInfo?.escuela || 'Colegio San Agustín'} zIndex={5}>
+              <Marker 
+                coordinate={
+                  rutaInfo?.escuela_lat && rutaInfo?.escuela_lng
+                    ? { latitude: Number(rutaInfo.escuela_lat), longitude: Number(rutaInfo.escuela_lng) }
+                    : { latitude: 8.9975, longitude: -79.5240 }
+                } 
+                title={rutaInfo?.escuela || 'Colegio San Agustín'} 
+                zIndex={5}
+              >
                 <View style={[styles.customMarkerHito, { backgroundColor: '#10B981' }]}><Text style={styles.markerEmojiSmall}>🏫</Text></View>
               </Marker>
 
@@ -263,7 +271,16 @@ function ViajeActivoPadre({
         </View>
         <View style={styles.divider} />
         <FilaInfoViaje icon="school-outline" label="Escuela" valor={getSafeText(rutaInfo?.escuela, 'Colegio San Agustín')} />
-        <FilaInfoViaje icon="time-outline" label="Horario" valor={getSafeText(rutaInfo?.horario, '6:30 AM — 7:15 AM')} last />
+        <FilaInfoViaje 
+          icon="time-outline" 
+          label={tipoViaje === 'vuelta' ? 'Salida Colegio' : 'Horario'} 
+          valor={
+            tipoViaje === 'vuelta' 
+              ? (rutaInfo?.hora_salida_vuelta || '2:30 PM (Aprox.)') 
+              : (rutaInfo?.horario || '6:30 AM — 7:15 AM')
+          } 
+          last 
+        />
       </View>
 
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Estado de tus hijos</Text>
@@ -371,7 +388,15 @@ function ViajeActivoConductor({
             ))}
 
             {/* Destino final: Escuela */}
-            <Marker coordinate={{ latitude: 8.9975, longitude: -79.5240 }} title={rutaInfo?.escuela || 'Colegio San Agustín'} zIndex={5}>
+            <Marker 
+              coordinate={
+                rutaInfo?.escuela_lat && rutaInfo?.escuela_lng
+                  ? { latitude: Number(rutaInfo.escuela_lat), longitude: Number(rutaInfo.escuela_lng) }
+                  : { latitude: 8.9975, longitude: -79.5240 }
+              } 
+              title={rutaInfo?.escuela || 'Colegio San Agustín'} 
+              zIndex={5}
+            >
               <View style={[styles.customMarkerHito, { backgroundColor: '#10B981' }]}><Text style={styles.markerEmojiSmall}>🏫</Text></View>
             </Marker>
           </MapView>

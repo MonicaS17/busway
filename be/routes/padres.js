@@ -57,7 +57,24 @@ router.get('/mis-hijos', verifyToken, async (req, res) => {
     const hijos = await Estudiante.find({ padre_id: padre._id })
       .populate('conductor_id', 'nombre apellido correo')
       .populate('ruta_id', 'nombre escuela zona');
-    res.json({ hijos });
+
+    const mappedHijos = hijos.map(h => {
+      const hDoc = h.toObject();
+      hDoc.lat = padre.ubicacion?.lat || hDoc.lat || null;
+      hDoc.lng = padre.ubicacion?.lng || hDoc.lng || null;
+      
+      const parts = [
+        padre.ubicacion?.provincia,
+        padre.ubicacion?.distrito,
+        padre.ubicacion?.corregimiento,
+        padre.ubicacion?.numero_casa
+      ].filter(Boolean);
+      hDoc.direccion = parts.length > 0 ? parts.join(', ') : (hDoc.direccion || 'Sin ubicación de recogida');
+      
+      return hDoc;
+    });
+
+    res.json({ hijos: mappedHijos });
   } catch (error) {
     res.status(500).json({ error: 'Error interno al obtener los hijos' });
   }
@@ -77,6 +94,34 @@ router.delete('/hijos/:id', verifyToken, async (req, res) => {
     res.json({ mensaje: 'Hijo eliminado correctamente' });
   } catch (error) {
     res.status(500).json({ error: 'Error interno al eliminar al hijo' });
+  }
+});
+
+// PATCH actualizar ubicación del estudiante (recogida/entrega)
+router.patch('/estudiante/:id/ubicacion', verifyToken, async (req, res) => {
+  try {
+    const padre = await Usuario.findOne({ firebase_uid: req.user.uid });
+    if (!padre) return res.status(404).json({ error: 'Padre no encontrado' });
+    if (padre.tipo !== 'padre') return res.status(403).json({ error: 'Acceso exclusivo para padres' });
+
+    const { lat, lng, direccion } = req.body;
+    if (lat === undefined || lng === undefined) {
+      return res.status(400).json({ error: 'Faltan coordenadas obligatorias: lat y lng' });
+    }
+
+    const hijo = await Estudiante.findOne({ _id: req.params.id, padre_id: padre._id });
+    if (!hijo) return res.status(404).json({ error: 'Hijo no encontrado o no te pertenece' });
+
+    hijo.lat = lat;
+    hijo.lng = lng;
+    if (direccion !== undefined) hijo.direccion = direccion;
+
+    await hijo.save();
+
+    res.json({ mensaje: 'Ubicación de recogida guardada correctamente', hijo });
+  } catch (error) {
+    console.error('Error al actualizar ubicación del estudiante:', error);
+    res.status(500).json({ error: 'Error interno al actualizar ubicación del estudiante' });
   }
 });
 

@@ -7,6 +7,9 @@ const estudianteSchema = new mongoose.Schema({
   ruta_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Ruta', default: null },
   qr_code: { type: String, required: true },
   estado: { type: String, default: 'Activo' },
+  lat: { type: Number, default: null },
+  lng: { type: Number, default: null },
+  direccion: { type: String, default: '' },
   fecha_registro: { type: Date, default: Date.now }
 });
 

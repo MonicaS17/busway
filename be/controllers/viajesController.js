@@ -1,8 +1,6 @@
 const Viaje = require('../models/Viaje');
 const Estudiante = require('../models/Estudiante');
 
-// Obtener el viaje activo de un conductor
-// Filtra ÚNICAMENTE por estado: 'activo'. Si no existe → 404 limpio.
 exports.getViajeActivoConductor = async (req, res) => {
   try {
     const Ruta = require('../models/Ruta');
@@ -14,9 +12,21 @@ exports.getViajeActivoConductor = async (req, res) => {
     const { calcularFaseRuta } = require('../utils/viajeHelper');
     const fase = await calcularFaseRuta(ruta._id);
 
-    let viajeActivo = null;
-    if (fase === 'en_curso') {
-      viajeActivo = await Viaje.findOne({ ruta_id: ruta._id, estado: 'activo' });
+    let viajeActivo = await Viaje.findOne({ ruta_id: ruta._id, estado: { $in: ['activo', 'en_espera'] } });
+
+    if (!viajeActivo && fase === 'sin_viaje') {
+      const totalEstudiantes = await Estudiante.countDocuments({ conductor_id: req.user.id, ruta_id: ruta._id });
+
+      if (totalEstudiantes > 0) {
+        viajeActivo = await Viaje.create({
+          ruta_id: ruta._id,
+          conductor_id: req.user.id,
+          estado: 'en_espera',
+          tipo_viaje: 'ida',
+          hora_salida: null
+        });
+        console.log(`Viaje de ida creado en espera automáticamente vía API ID: ${viajeActivo._id}`);
+      }
     }
 
     return res.json({
@@ -55,11 +65,8 @@ exports.getViajeActivoPadre = async (req, res) => {
     const rutaId = rutaIds[0];
     const fase = await calcularFaseRuta(rutaId);
 
-    let viajeActivo = null;
-    if (fase === 'en_curso') {
-      viajeActivo = await Viaje.findOne({ ruta_id: rutaId, estado: 'activo' })
-        .populate('ruta_id', 'nombre_ruta zona horario_salida');
-    }
+    let viajeActivo = await Viaje.findOne({ ruta_id: rutaId, estado: { $in: ['activo', 'en_espera'] } })
+      .populate('ruta_id', 'nombre_ruta zona horario_salida');
 
     res.json({ viaje: viajeActivo, fase });
   } catch (error) {

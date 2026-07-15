@@ -10,6 +10,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { auth } from '../../config/firebase';
 import api from '../../config/api';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function RutaScreen({ navigation, route }) {
@@ -626,6 +627,8 @@ function RutaConductor({ navigation, usuario }) {
   const [editando, setEditando] = useState(false);
   const [estudiantes, setEstudiantes] = useState([]);
   const [rutas, setRutas] = useState([]);
+  const [formEscuelaLat, setFormEscuelaLat] = useState(null);
+  const [formEscuelaLng, setFormEscuelaLng] = useState(null);
 
   // Formulario de creación
   const [mostrarCrear, setMostrarCrear] = useState(false);
@@ -637,6 +640,8 @@ function RutaConductor({ navigation, usuario }) {
   const [formLlegadaDate, setFormLlegadaDate] = useState(null);
   const [showSalidaPicker, setShowSalidaPicker] = useState(false);
   const [showLlegadaPicker, setShowLlegadaPicker] = useState(false);
+  const [formSalidaVueltaDate, setFormSalidaVueltaDate] = useState(null);
+  const [showSalidaVueltaPicker, setShowSalidaVueltaPicker] = useState(false);
   const [listaEscuelas, setListaEscuelas] = useState([]);
   
   // Frecuencia por chips
@@ -782,7 +787,10 @@ function RutaConductor({ navigation, usuario }) {
           activa: r.estado === 'activa',
           horario: (r.horario_salida && r.horario_llegada) ? `${r.horario_salida} — ${r.horario_llegada}` : (r.horario || '6:30 AM — 7:15 AM'),
           frecuencia: r.frecuencia,
-          nombre: r.nombre
+          nombre: r.nombre,
+          escuela_lat: r.escuela_lat || null,
+          escuela_lng: r.escuela_lng || null,
+          hora_salida_vuelta: r.hora_salida_vuelta || null
         }));
         setRutas(mappedRutas);
       } else {
@@ -854,6 +862,12 @@ function RutaConductor({ navigation, usuario }) {
     if (!formLlegadaDate) {
       errores.horario_llegada = 'La hora de llegada es obligatoria';
     }
+    if (!formSalidaVueltaDate) {
+      errores.hora_salida_vuelta = 'La hora de salida del colegio es obligatoria';
+    }
+    if (!formEscuelaLat || !formEscuelaLng) {
+      errores.escuela_map = 'Debes marcar la ubicación de la escuela en el mapa';
+    }
     if (formFrecuencia.length === 0) {
       errores.frecuencia = 'Selecciona al menos un día';
     }
@@ -884,7 +898,10 @@ function RutaConductor({ navigation, usuario }) {
         zona: formZona.trim(),
         horario_salida: formatTime12h(formSalidaDate),
         horario_llegada: formatTime12h(formLlegadaDate),
-        frecuencia: formFrecuencia
+        frecuencia: formFrecuencia,
+        escuela_lat: formEscuelaLat,
+        escuela_lng: formEscuelaLng,
+        hora_salida_vuelta: formatTime12h(formSalidaVueltaDate)
       };
 
       let res;
@@ -911,6 +928,9 @@ function RutaConductor({ navigation, usuario }) {
         setFormSalidaDate(null);
         setFormLlegadaDate(null);
         setFormFrecuencia(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
+        setFormEscuelaLat(null);
+        setFormEscuelaLng(null);
+        setFormSalidaVueltaDate(null);
         setFormErrores({});
         setRutaIdEditando(null);
         setMostrarCrear(false);
@@ -945,6 +965,29 @@ function RutaConductor({ navigation, usuario }) {
     setFormNombreRuta(rut.nombre_ruta);
     setFormEscuelaId(rut.escuela_id);
     setFormZona(rut.zona);
+    setFormEscuelaLat(rut.escuela_lat || null);
+    setFormEscuelaLng(rut.escuela_lng || null);
+
+    if (rut.hora_salida_vuelta) {
+      const parseTimeStr = (str) => {
+        const clean = str.trim();
+        const match = clean.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+        if (match) {
+          let h = parseInt(match[1]);
+          const m = parseInt(match[2]);
+          const isPM = match[3].toUpperCase() === 'PM';
+          if (isPM && h < 12) h += 12;
+          if (!isPM && h === 12) h = 0;
+          const d = new Date();
+          d.setHours(h, m, 0, 0);
+          return d;
+        }
+        return new Date();
+      };
+      setFormSalidaVueltaDate(parseTimeStr(rut.hora_salida_vuelta));
+    } else {
+      setFormSalidaVueltaDate(null);
+    }
 
     if (rut.horario) {
       const times = rut.horario.split('—');
@@ -1083,6 +1126,9 @@ function RutaConductor({ navigation, usuario }) {
             setFormSalidaDate(null);
             setFormLlegadaDate(null);
             setFormFrecuencia(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
+            setFormEscuelaLat(null);
+            setFormEscuelaLng(null);
+            setFormSalidaVueltaDate(null);
           }} style={styles.btnVolver}>
             <Ionicons name="arrow-back-outline" size={18} color="#0D1B3E" />
             <Text style={styles.btnVolverText}>Cancelar</Text>
@@ -1193,6 +1239,41 @@ function RutaConductor({ navigation, usuario }) {
               </Text>
             ) : null}
             {formErrores.escuela_id && <Text style={styles.errorInline}>{formErrores.escuela_id}</Text>}
+
+            {formEscuelaId ? (
+              <View style={styles.formGroup}>
+                <Text style={styles.inputLabel}>Ubicación de la escuela (Toca el mapa para marcarla) *</Text>
+                <View style={styles.formMapContainer}>
+                  <MapView
+                    style={styles.formMap}
+                    provider={PROVIDER_DEFAULT}
+                    initialRegion={{
+                      latitude: formEscuelaLat || 8.9833,
+                      longitude: formEscuelaLng || -79.5167,
+                      latitudeDelta: 0.03,
+                      longitudeDelta: 0.03,
+                    }}
+                    onPress={(e) => {
+                      const { latitude, longitude } = e.nativeEvent.coordinate;
+                      setFormEscuelaLat(latitude);
+                      setFormEscuelaLng(longitude);
+                    }}
+                  >
+                    {formEscuelaLat && formEscuelaLng && (
+                      <Marker
+                        coordinate={{ latitude: formEscuelaLat, longitude: formEscuelaLng }}
+                        title="Ubicación de la escuela"
+                      >
+                        <View style={styles.customMarkerHito}>
+                          <Text style={{ fontSize: 13 }}>🏫</Text>
+                        </View>
+                      </Marker>
+                    )}
+                  </MapView>
+                </View>
+                {formErrores.escuela_map && <Text style={styles.errorInline}>{formErrores.escuela_map}</Text>}
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.formGroup}>
@@ -1256,6 +1337,34 @@ function RutaConductor({ navigation, usuario }) {
                   setShowLlegadaPicker(Platform.OS === 'ios');
                   if (selectedDate) {
                     setFormLlegadaDate(selectedDate);
+                  }
+                }}
+              />
+            )}
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.inputLabel}>Hora de salida del colegio (Vuelta) *</Text>
+            <TouchableOpacity
+              style={[styles.formInput, formErrores.hora_salida_vuelta && styles.formInputError, { justifyContent: 'center', minHeight: 48 }]}
+              onPress={() => setShowSalidaVueltaPicker(true)}
+            >
+              <Text style={{ color: formSalidaVueltaDate ? '#0D1B3E' : '#888', fontSize: 14 }}>
+                {formSalidaVueltaDate ? formatTime12h(formSalidaVueltaDate) : 'Selecciona hora de salida del colegio'}
+              </Text>
+            </TouchableOpacity>
+            {formErrores.hora_salida_vuelta && <Text style={styles.errorInline}>{formErrores.hora_salida_vuelta}</Text>}
+            
+            {showSalidaVueltaPicker && (
+              <DateTimePicker
+                value={formSalidaVueltaDate || new Date()}
+                mode="time"
+                is24Hour={false}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(event, selectedDate) => {
+                  setShowSalidaVueltaPicker(Platform.OS === 'ios');
+                  if (selectedDate) {
+                    setFormSalidaVueltaDate(selectedDate);
                   }
                 }}
               />
@@ -1355,6 +1464,12 @@ function RutaConductor({ navigation, usuario }) {
               <Text style={{ fontSize: 12, fontWeight: '600', color: '#888', marginRight: 4 }}>Frecuencia:</Text>
               {renderFrecuenciaTextoUChips(rutaSeleccionada.frecuencia)}
             </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 4, gap: 6 }}>
+              <Ionicons name="time-outline" size={14} color="#888" />
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#888', marginRight: 4 }}>Salida Tarde (Vuelta):</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#0D1B3E' }}>{rutaSeleccionada.hora_salida_vuelta || '2:30 PM (Aprox.)'}</Text>
+            </View>
             
             <View style={styles.divider} />
             <View style={styles.zonasRow}>
@@ -1365,6 +1480,34 @@ function RutaConductor({ navigation, usuario }) {
                 </View>
               ))}
             </View>
+
+            {rutaSeleccionada.escuela_lat && rutaSeleccionada.escuela_lng ? (
+              <>
+                <View style={styles.divider} />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#0D1B3E', marginBottom: 8, marginTop: 8 }}>Ubicación de la escuela:</Text>
+                <View style={styles.mapaContainer}>
+                  <MapView
+                    style={styles.mapaSimulado}
+                    provider={PROVIDER_DEFAULT}
+                    initialRegion={{
+                      latitude: Number(rutaSeleccionada.escuela_lat),
+                      longitude: Number(rutaSeleccionada.escuela_lng),
+                      latitudeDelta: 0.01,
+                      longitudeDelta: 0.01
+                    }}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                  >
+                    <Marker
+                      coordinate={{ latitude: Number(rutaSeleccionada.escuela_lat), longitude: Number(rutaSeleccionada.escuela_lng) }}
+                      title={rutaSeleccionada.escuela_nombre}
+                    >
+                      <View style={styles.customMarkerHito}><Text style={{ fontSize: 13 }}>🏫</Text></View>
+                    </Marker>
+                  </MapView>
+                </View>
+              </>
+            ) : null}
 
             <View style={styles.divider} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
@@ -1973,5 +2116,42 @@ const styles = StyleSheet.create({
   },
   miniChipTextUnselected: {
     color: '#888',
+  },
+  formMapContainer: {
+    height: 200,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    marginTop: 8,
+  },
+  formMap: {
+    flex: 1,
+  },
+  mapaContainer: {
+    height: 160,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    marginTop: 8,
+  },
+  mapaSimulado: {
+    flex: 1,
+  },
+  customMarkerHito: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
 });
