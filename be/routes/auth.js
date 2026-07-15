@@ -19,6 +19,39 @@ const validarCorreo = (correo) => {
   return regex.test(correo);
 };
 
+// CHECK DUPLICADOS & VALIDACIONES ANTES DE CREAR FIREBASE USER
+router.post('/check-register', async (req, res) => {
+  try {
+    const { correo, cedula, placa } = req.body;
+    if (correo) {
+      const correoExiste = await Usuario.findOne({ correo });
+      if (correoExiste) {
+        return res.status(400).json({ error: 'Este correo ya está registrado en BusWay' });
+      }
+    }
+    if (cedula) {
+      const cedulaExiste = await Usuario.findOne({ cedula });
+      if (cedulaExiste) {
+        return res.status(400).json({ error: 'Esta cédula ya está registrada en BusWay' });
+      }
+    }
+    if (placa) {
+      const placaRegex = /^\d{1,2}BC-\d{1,4}$/i;
+      if (!placaRegex.test(placa.trim())) {
+        return res.status(400).json({ error: 'Formato de placa inválido. Ejemplos aceptados: 8BC-05, 4BC-89, 8BC-145, 13BC-720, 8BC-3004.' });
+      }
+      const placaExiste = await Vehiculo.findOne({ placa });
+      if (placaExiste) {
+        return res.status(400).json({ error: 'Esta placa de autobús ya está registrada en BusWay' });
+      }
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error in check-register:', error);
+    res.status(500).json({ error: 'Error interno de validación' });
+  }
+});
+
 //REGISTRO
 router.post('/register', async (req, res) => {
   try {
@@ -57,6 +90,35 @@ router.post('/register', async (req, res) => {
     const cedulaExiste = await Usuario.findOne({ cedula });
     if (cedulaExiste) {
       return res.status(400).json({ error: 'Esta cédula ya está registrada en BusWay' });
+    }
+
+    // Validaciones específicas para el rol de Conductor
+    if (tipo === 'conductor') {
+      if (!datos_conductor || !datos_conductor.telefono) {
+        return res.status(400).json({ error: 'El teléfono del conductor es obligatorio' });
+      }
+      const telefonoRegex = /^[6-9]\d{3}-\d{4}$/;
+      if (!telefonoRegex.test(datos_conductor.telefono)) {
+        return res.status(400).json({ error: 'Formato de teléfono del conductor inválido. Debe ser del tipo 6666-6666' });
+      }
+
+      if (!vehiculo) {
+        return res.status(400).json({ error: 'Los datos del vehículo son obligatorios para el registro del conductor.' });
+      }
+      const { placa, marca, modelo, anio, num_asientos } = vehiculo;
+      if (!placa || !placa.trim() || !marca || !marca.trim() || !modelo || !modelo.trim() || !anio || !num_asientos) {
+        return res.status(400).json({ error: 'Faltan campos obligatorios en los datos del vehículo (placa, marca, modelo, año, asientos).' });
+      }
+      const placaRegex = /^\d{1,2}BC-\d{1,4}$/i;
+      if (!placaRegex.test(placa.trim())) {
+        return res.status(400).json({ error: 'Formato de placa inválido. Ejemplos aceptados: 8BC-05, 4BC-89, 8BC-145, 13BC-720, 8BC-3004.' });
+      }
+      if (isNaN(anio) || String(anio).length !== 4) {
+        return res.status(400).json({ error: 'El año del vehículo debe ser un número de 4 dígitos.' });
+      }
+      if (isNaN(num_asientos) || Number(num_asientos) <= 0 || Number(num_asientos) > 30) {
+        return res.status(400).json({ error: 'El número de asientos debe ser un número positivo y no puede exceder el límite máximo de 30.' });
+      }
     }
 
     const nuevoUsuario = new Usuario({
@@ -203,14 +265,24 @@ router.patch('/usuarios/:id/estado', verifyToken, requireRole('administrador'), 
 // Guardar ubicación del padre
 router.patch('/ubicacion', verifyToken, async (req, res) => {
   try {
-    const { provincia, distrito, corregimiento } = req.body;
+    const { provincia, distrito, corregimiento, lat, lng, numero_casa, comentario } = req.body;
     if (!provincia || !distrito || !corregimiento) {
       return res.status(400).json({ error: 'Provincia, distrito y corregimiento son obligatorios' });
     }
 
     const usuario = await Usuario.findOneAndUpdate(
       { firebase_uid: req.user.uid },
-      { ubicacion: { provincia, distrito, corregimiento } },
+      { 
+        ubicacion: { 
+          provincia, 
+          distrito, 
+          corregimiento,
+          lat: lat ? Number(lat) : null,
+          lng: lng ? Number(lng) : null,
+          numero_casa: numero_casa || null,
+          comentario: comentario || null
+        } 
+      },
       { new: true }
     );
 
