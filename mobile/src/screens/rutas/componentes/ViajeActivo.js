@@ -187,7 +187,7 @@ function ViajeActivoPadre({
         <Ionicons name={configVisual.icono} size={22} color={configVisual.colorIcono} />
       </View>
 
-      {rutaActiva && estadoHijo !== 'ausente' && (
+      {rutaActiva && estadoHijo !== 'ausente' && estadoHijo !== 'entregado' && (
         <>
           <Text style={styles.sectionLabel}>Ubicación del bus</Text>
           <View style={styles.mapaContainer}>

@@ -553,6 +553,10 @@ module.exports = (io) => {
             tipoNotificacion = 'recogido_en_casa';
             tituloNotif = '🚌 ¡Abordo!';
             mensajeNotif = 'Su hijo ha sido recogido y va en camino a la escuela.';
+          } else if (estado === 'ausente') {
+            tipoNotificacion = 'ausente';
+            tituloNotif = '⚠️ Reporte de inasistencia';
+            mensajeNotif = 'Su hijo ha sido marcado como ausente para este viaje.';
           }
         } else if (tipoViaje === 'vuelta') {
           if (estado === 'abordado' || estado === 'abordo') {
@@ -563,6 +567,10 @@ module.exports = (io) => {
             tipoNotificacion = 'entregado_en_casa';
             tituloNotif = '🏠 ¡Llegada exitosa!';
             mensajeNotif = 'Su hijo ha sido entregado de forma segura en casa.';
+          } else if (estado === 'ausente') {
+            tipoNotificacion = 'ausente';
+            tituloNotif = '⚠️ Reporte de inasistencia';
+            mensajeNotif = 'Su hijo ha sido marcado como ausente para este viaje de regreso.';
           }
         }
 
