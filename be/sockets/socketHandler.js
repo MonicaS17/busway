@@ -294,11 +294,11 @@ module.exports = (io) => {
           createdAt: { $gte: inicioDia }
         }).sort({ createdAt: -1 });
 
-        if (!viajeIda) {
-          console.warn(`⚠️ No se encontró viaje de ida para ruta ${id_ruta}. No se puede crear vuelta.`);
+        if (!viajeIda || viajeIda.estado === 'en_espera') {
+          console.warn(`⚠️ El viaje de ida no fue iniciado para la ruta ${id_ruta}. No se puede crear vuelta.`);
           socket.emit('error:servidor', {
-            codigo: 'IDA_NO_ENCONTRADA',
-            mensaje: 'No se encontró el viaje de ida de hoy. No es posible crear el viaje de vuelta.'
+            codigo: 'IDA_NO_INICIADA',
+            mensaje: 'No puedes iniciar el viaje de vuelta porque no se inició el viaje de ida de esta mañana.'
           });
           return;
         }

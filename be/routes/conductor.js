@@ -88,6 +88,7 @@ router.get('/estudiantes', verifyToken, async (req, res) => {
           est.padre_id.ubicacion?.numero_casa
         ].filter(Boolean);
         estDoc.direccion = parts.length > 0 ? parts.join(', ') : (estDoc.direccion || 'Sin ubicación de recogida');
+        estDoc.zona = est.padre_id.ubicacion?.corregimiento || 'Sin corregimiento';
       }
       return estDoc;
     });
@@ -174,6 +175,7 @@ router.get('/ruta', verifyToken, async (req, res) => {
             student.padre_id.ubicacion?.numero_casa
           ].filter(Boolean);
           doc.direccion = parts.length > 0 ? parts.join(', ') : (doc.direccion || 'Sin ubicación de recogida');
+          doc.zona = student.padre_id.ubicacion?.corregimiento || 'Sin corregimiento';
         }
         return doc;
       }).sort((a, b) => a.orden - b.orden);
@@ -227,6 +229,7 @@ router.get('/ruta/:rutaId', verifyToken, async (req, res) => {
           student.padre_id.ubicacion?.numero_casa
         ].filter(Boolean);
         sDoc.direccion = parts.length > 0 ? parts.join(', ') : (sDoc.direccion || 'Sin ubicación de recogida');
+        sDoc.zona = student.padre_id.ubicacion?.corregimiento || 'Sin corregimiento';
       }
       return sDoc;
     }).sort((a, b) => a.orden - b.orden);

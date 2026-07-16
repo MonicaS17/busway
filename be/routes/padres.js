@@ -70,6 +70,7 @@ router.get('/mis-hijos', verifyToken, async (req, res) => {
         padre.ubicacion?.numero_casa
       ].filter(Boolean);
       hDoc.direccion = parts.length > 0 ? parts.join(', ') : (hDoc.direccion || 'Sin ubicación de recogida');
+      hDoc.zona = padre.ubicacion?.corregimiento || 'Sin corregimiento';
       
       return hDoc;
     });

@@ -322,6 +322,7 @@ function ViajeActivoConductor({
   bottomInset
 }) {
   const [permission, requestPermission] = useCameraPermissions();
+  const [mostrarEscaner, setMostrarEscaner] = useState(false);
 
   const abordo = estudiantes.filter(e => e.estado === 'abordo').length;
   const pendiente = estudiantes.filter(e => e.estado === 'pendiente').length;
@@ -402,6 +403,50 @@ function ViajeActivoConductor({
           </MapView>
         </View>
 
+        {/* Panel escáner QR colapsable */}
+        <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
+          <TouchableOpacity 
+            style={{ 
+              backgroundColor: mostrarEscaner ? '#DC2626' : '#0D1B3E', 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              padding: 12, 
+              borderRadius: 12,
+              gap: 8
+            }} 
+            onPress={() => setMostrarEscaner(!mostrarEscaner)}
+          >
+            <Ionicons name={mostrarEscaner ? 'close-circle-outline' : 'qr-code-outline'} size={18} color="#fff" />
+            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>
+              {mostrarEscaner ? 'Ocultar Escáner QR' : 'Escanear Código QR en ruta'}
+            </Text>
+          </TouchableOpacity>
+
+          {mostrarEscaner && (
+            <View style={[styles.cameraContainer, { height: 180, marginTop: 8 }]}>
+              {permission?.granted ? (
+                <CameraView 
+                  style={{ flex: 1 }} 
+                  facing="back" 
+                  onBarcodeScanned={tipoViaje === 'ida' ? handleQRScanned : handleParentQRScanned} 
+                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }} 
+                />
+              ) : (
+                <TouchableOpacity style={styles.btnPrimary} onPress={requestPermission}>
+                  <Text style={styles.btnPrimaryText}>Conceder permiso de cámara</Text>
+                </TouchableOpacity>
+              )}
+              <View style={styles.qrOverlay}>
+                <View style={[styles.qrFrame, { width: 120, height: 120 }]}>
+                  <View style={[styles.qrCorner, styles.qrCornerTL]} /><View style={[styles.qrCorner, styles.qrCornerTR]} />
+                  <View style={[styles.qrCorner, styles.qrCornerBL]} /><View style={[styles.qrCorner, styles.qrCornerBR]} />
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
+
         {/* Listado de secuencia de paradas */}
         <Text style={styles.sectionLabel}>Secuencia de paradas</Text>
         <View style={[styles.infoCard, { marginBottom: 16, paddingVertical: 4 }]}>
@@ -418,6 +463,41 @@ function ViajeActivoConductor({
                 <Text style={{ fontSize: 10, fontWeight: '700', color: est.estado === 'abordo' ? '#16A34A' : (est.estado === 'ausente' ? '#DC2626' : '#F59E0B') }}>
                   {est.estado === 'abordo' ? 'A Bordo' : (est.estado === 'ausente' ? 'Ausente' : 'Pendiente')}
                 </Text>
+              </View>
+              {/* Acciones manuales en línea */}
+              <View style={{ flexDirection: 'row', gap: 6, marginLeft: 10 }}>
+                {tipoViaje === 'ida' ? (
+                  <>
+                    {est.estado === 'pendiente' && (
+                      <>
+                        <TouchableOpacity 
+                          style={{ backgroundColor: '#16A34A', padding: 6, borderRadius: 6 }} 
+                          onPress={() => marcarEstado(est.id, 'abordo')}
+                        >
+                          <Ionicons name="checkmark" size={14} color="#fff" />
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={{ backgroundColor: '#DC2626', padding: 6, borderRadius: 6 }} 
+                          onPress={() => marcarEstado(est.id, 'ausente')}
+                        >
+                          <Ionicons name="close" size={14} color="#fff" />
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {est.estado === 'abordo' && (
+                      <TouchableOpacity 
+                        style={{ backgroundColor: '#0D1B3E', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }} 
+                        onPress={() => marcarEstado(est.id, 'entregado')}
+                      >
+                        <Ionicons name="hand-left-outline" size={12} color="#fff" />
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Entregar</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
               </View>
             </View>
           ))}
@@ -436,19 +516,6 @@ function ViajeActivoConductor({
           <View style={styles.seccionAccion}>
             {tipoViaje === 'ida' ? (
               <>
-                <View style={styles.cameraContainer}>
-                  {permission?.granted ? (
-                    <CameraView style={{ flex: 1 }} facing="back" onBarcodeScanned={handleQRScanned} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} />
-                  ) : (
-                    <TouchableOpacity style={styles.btnPrimary} onPress={requestPermission}><Text style={styles.btnPrimaryText}>Conceder permiso de cámara</Text></TouchableOpacity>
-                  )}
-                  <View style={styles.qrOverlay}>
-                    <View style={styles.qrFrame}>
-                      <View style={[styles.qrCorner, styles.qrCornerTL]} /><View style={[styles.qrCorner, styles.qrCornerTR]} />
-                      <View style={[styles.qrCorner, styles.qrCornerBL]} /><View style={[styles.qrCorner, styles.qrCornerBR]} />
-                    </View>
-                  </View>
-                </View>
                 <TarjetaEstudiante student={estudianteActual} />
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
                   <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#16A34A', flex: 1 }]} onPress={() => marcarEstado(estudianteActual.id, 'abordo')}>
@@ -461,19 +528,6 @@ function ViajeActivoConductor({
               </>
             ) : (
               <>
-                <View style={styles.cameraContainer}>
-                  {permission?.granted ? (
-                    <CameraView style={{ flex: 1 }} facing="back" onBarcodeScanned={handleParentQRScanned} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} />
-                  ) : (
-                    <TouchableOpacity style={styles.btnPrimary} onPress={requestPermission}><Text style={styles.btnPrimaryText}>Conceder permiso de cámara</Text></TouchableOpacity>
-                  )}
-                  <View style={styles.qrOverlay}>
-                    <View style={styles.qrFrame}>
-                      <View style={[styles.qrCorner, styles.qrCornerTL]} /><View style={[styles.qrCorner, styles.qrCornerTR]} />
-                      <View style={[styles.qrCorner, styles.qrCornerBL]} /><View style={[styles.qrCorner, styles.qrCornerBR]} />
-                    </View>
-                  </View>
-                </View>
                 <TarjetaEstudiante student={estudianteActual} />
                 <View style={{ flexDirection: 'column', gap: 8, marginTop: 4 }}>
                   <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#0D1B3E' }]} onPress={() => marcarEstado(estudianteActual.id, 'entregado')}>
