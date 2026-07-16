@@ -90,7 +90,16 @@ export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRuta
               headers: { Authorization: `Bearer ${idToken}` }
             });
             if (resPerfil.data) {
-              setConductorInfo(resPerfil.data.conductor);
+              const cond = resPerfil.data.conductor || {};
+              const veh = resPerfil.data.vehiculo;
+              if (veh) {
+                cond.datos_conductor = {
+                  ...cond.datos_conductor,
+                  vehiculo: `${veh.marca} ${veh.modelo}`,
+                  placa: veh.placa
+                };
+              }
+              setConductorInfo(cond);
             }
           } catch (err) {
             console.log('Error fetching conductor profile:', err.message);

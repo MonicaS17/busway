@@ -286,7 +286,7 @@ module.exports = (io) => {
           });
 
           for (const estId of estudiantesAsistieron) {
-            await notificarPadre(estId, viajeFinalizado._id, 'en_escuela', '🏫 ¡Llegada a la escuela!', 'Su hijo ha llegado a la escuela de manera segura.');
+            await notificarPadre(estId, viajeFinalizado._id, 'en_escuela', '🏫 ¡Llegada!', 'llego a la escuela');
           }
 
           // El viaje de ida termina; la vuelta se crea solo cuando el conductor la inicie.
@@ -464,17 +464,17 @@ module.exports = (io) => {
           if (tipo === 'subida') {
             tipoNotificacion = 'recogido_en_casa';
             tituloNotif = '🚌 ¡Abordo!';
-            mensajeNotif = 'Su hijo ha sido recogido y va en camino a la escuela.';
+            mensajeNotif = 'abordo camino a la escuela';
           }
         } else if (tipoViaje === 'vuelta') {
           if (tipo === 'subida') {
             tipoNotificacion = 'regreso_iniciado';
-            tituloNotif = '🚌 ¡Regreso iniciado!';
-            mensajeNotif = 'El conductor ya salió de la escuela con su hijo.';
+            tituloNotif = '🚌 ¡Abordo!';
+            mensajeNotif = 'abordo camino a casa';
           } else if (tipo === 'bajada') {
             tipoNotificacion = 'entregado_en_casa';
-            tituloNotif = '🏠 ¡Llegada exitosa!';
-            mensajeNotif = 'Su hijo ha sido entregado de forma segura en casa.';
+            tituloNotif = '🏠 ¡Llegada!';
+            mensajeNotif = 'llego a casa';
           }
         }
 
@@ -552,25 +552,25 @@ module.exports = (io) => {
           if (estado === 'abordado' || estado === 'abordo') {
             tipoNotificacion = 'recogido_en_casa';
             tituloNotif = '🚌 ¡Abordo!';
-            mensajeNotif = 'Su hijo ha sido recogido y va en camino a la escuela.';
+            mensajeNotif = 'abordo camino a la escuela';
           } else if (estado === 'ausente') {
             tipoNotificacion = 'ausente';
             tituloNotif = '⚠️ Reporte de inasistencia';
-            mensajeNotif = 'Su hijo ha sido marcado como ausente para este viaje.';
+            mensajeNotif = 'ausente';
           }
         } else if (tipoViaje === 'vuelta') {
           if (estado === 'abordado' || estado === 'abordo') {
             tipoNotificacion = 'regreso_iniciado';
-            tituloNotif = '🚌 ¡Regreso iniciado!';
-            mensajeNotif = 'El conductor ya salió de la escuela con su hijo.';
+            tituloNotif = '🚌 ¡Abordo!';
+            mensajeNotif = 'abordo camino a casa';
           } else if (estado === 'entregado') {
             tipoNotificacion = 'entregado_en_casa';
-            tituloNotif = '🏠 ¡Llegada exitosa!';
-            mensajeNotif = 'Su hijo ha sido entregado de forma segura en casa.';
+            tituloNotif = '🏠 ¡Llegada!';
+            mensajeNotif = 'llego a casa';
           } else if (estado === 'ausente') {
             tipoNotificacion = 'ausente';
             tituloNotif = '⚠️ Reporte de inasistencia';
-            mensajeNotif = 'Su hijo ha sido marcado como ausente para este viaje de regreso.';
+            mensajeNotif = 'ausente';
           }
         }
 

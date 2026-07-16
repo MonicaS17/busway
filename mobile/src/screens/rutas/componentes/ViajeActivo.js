@@ -64,31 +64,36 @@ function ViajeActivoPadre({
 
   if (estadoHijo === 'ausente') {
     estadoVisual = 'ausente';
-  } else if (faseViaje === 'sin_viaje') {
-    estadoVisual = 'esperando_ida';
-  } else if (faseViaje === 'entre_viajes') {
-    estadoVisual = 'en_escuela';
-  } else if (rutaActiva || faseViaje === 'en_curso') {
-    if (tipoViaje === 'vuelta') {
-      if (estadoHijo === 'entregado') {
-        estadoVisual = 'entregado';
-      } else if (estadoHijo === 'abordo') {
-        estadoVisual = 'regreso_iniciado';
-      } else {
-        estadoVisual = 'en_escuela';
-      }
+  } else if (tipoViaje === 'vuelta') {
+    if (estadoHijo === 'entregado') {
+      estadoVisual = 'entregado_vuelta';
+    } else if (estadoHijo === 'abordo') {
+      estadoVisual = 'abordo_vuelta';
     } else {
-      // Ida
-      if (estadoHijo === 'abordo') {
-        estadoVisual = 'recogido_en_casa';
+      if (rutaActiva || faseViaje === 'en_curso') {
+        estadoVisual = 'esperando_vuelta_activo';
       } else {
-        estadoVisual = 'esperando_ida';
+        estadoVisual = 'esperando_vuelta_inactivo';
+      }
+    }
+  } else {
+    // Ida (Mañana)
+    if (estadoHijo === 'entregado' || faseViaje === 'entre_viajes') {
+      estadoVisual = 'en_escuela';
+    } else if (estadoHijo === 'abordo') {
+      estadoVisual = 'abordo_ida';
+    } else {
+      if (rutaActiva || faseViaje === 'en_curso') {
+        estadoVisual = 'esperando_ida_activo';
+      } else {
+        estadoVisual = 'esperando_ida_inactivo';
       }
     }
   }
 
   const configVisual = {
-    esperando_ida: {
+    // Ida - Mañana
+    esperando_ida_inactivo: {
       icono: 'time-outline',
       titulo: 'Esperando recogida',
       mensaje: 'El conductor aún no ha iniciado la ruta.',
@@ -97,10 +102,19 @@ function ViajeActivoPadre({
       colorIcono: '#888',
       activo: false
     },
-    recogido_en_casa: {
+    esperando_ida_activo: {
       icono: 'bus-outline',
-      titulo: 'En camino a la escuela',
-      mensaje: 'Tu hijo fue recogido y va en camino a la escuela.',
+      titulo: 'Ruta iniciada',
+      mensaje: 'Esperando a recoger',
+      colorFondo: '#3B82F6',
+      colorTexto: '#fff',
+      colorIcono: '#fff',
+      activo: true
+    },
+    abordo_ida: {
+      icono: 'checkmark-circle-outline',
+      titulo: 'Ruta iniciada',
+      mensaje: 'Abordo',
       colorFondo: '#10B981',
       colorTexto: '#fff',
       colorIcono: '#fff',
@@ -108,31 +122,53 @@ function ViajeActivoPadre({
     },
     en_escuela: {
       icono: 'school-outline',
-      titulo: 'En la escuela',
-      mensaje: 'Tu hijo llegó a la escuela. El viaje de regreso iniciará más tarde.',
-      colorFondo: '#3B82F6',
+      titulo: 'Ruta finalizada',
+      mensaje: 'Llegada a la escuela',
+      colorFondo: '#0D1B3E',
       colorTexto: '#fff',
       colorIcono: '#fff',
       activo: false
     },
-    regreso_iniciado: {
-      icono: 'home-outline',
-      titulo: 'Va en camino a casa',
-      mensaje: 'El conductor ya salió de la escuela con tu hijo.',
-      colorFondo: '#F59E0B',
+
+    // Vuelta - Tarde
+    esperando_vuelta_inactivo: {
+      icono: 'time-outline',
+      titulo: 'Esperando regreso',
+      mensaje: 'El viaje de regreso a casa no ha iniciado.',
+      colorFondo: '#F5F8FC',
+      colorTexto: '#0D1B3E',
+      colorIcono: '#888',
+      activo: false
+    },
+    esperando_vuelta_activo: {
+      icono: 'bus-outline',
+      titulo: 'Ruta iniciada',
+      mensaje: 'Esperando a recoger',
+      colorFondo: '#3B82F6',
       colorTexto: '#fff',
       colorIcono: '#fff',
       activo: true
     },
-    entregado: {
+    abordo_vuelta: {
       icono: 'checkmark-circle-outline',
-      titulo: 'Llegó a casa',
-      mensaje: 'Tu hijo fue entregado en casa.',
+      titulo: 'Ruta iniciada',
+      mensaje: 'Abordo',
+      colorFondo: '#10B981',
+      colorTexto: '#fff',
+      colorIcono: '#fff',
+      activo: true
+    },
+    entregado_vuelta: {
+      icono: 'home-outline',
+      titulo: 'Ruta iniciada',
+      mensaje: 'Llegada a casa',
       colorFondo: '#10B981',
       colorTexto: '#fff',
       colorIcono: '#fff',
       activo: false
     },
+
+    // Común
     ausente: {
       icono: 'close-circle-outline',
       titulo: 'Ausente hoy',
