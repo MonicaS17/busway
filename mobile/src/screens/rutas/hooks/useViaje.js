@@ -284,11 +284,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         // Actualizar idViaje, tipoViaje y currentStep tras confirmación del backend (regla global)
         setIdViaje(data.id_viaje);
         setTipoViaje(data.tipo_viaje);
-        if (data.tipo_viaje === 'ida') {
-          setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'abordo' })));
-        } else {
-          setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
-        }
+        setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
         setCurrentStep('ACTIVE_TRIP');
       });
       socketClient.on('asistencia:actualizada', (data) => {
