@@ -218,6 +218,32 @@ module.exports = (io) => {
           console.log(`▶️ Nuevo viaje creado ID: ${nuevoViaje._id} (${tipoEfectivo})`);
         }
 
+        // Si es viaje de ida, de inicio de ruta debe de marcar a todos como a bordo automáticamente
+        if (tipoEfectivo === 'ida') {
+          const ahora = new Date();
+          const asistenciasIda = estudiantesRuta.map(est => ({
+            hijo_id: est._id,
+            tipo: 'subida',
+            metodo_registro: 'automatico',
+            fecha_hora: ahora
+          }));
+
+          const idsEstudiantes = estudiantesRuta.map(est => est._id);
+          nuevoViaje = await Viaje.findByIdAndUpdate(nuevoViaje._id, {
+            $set: {
+              asistencias: asistenciasIda,
+              estudiantes_abordo: idsEstudiantes
+            }
+          }, { new: true });
+
+          console.log(`✅ Viaje de ida ID: ${nuevoViaje._id}. Todos los estudiantes marcados como A bordo automáticamente.`);
+
+          // Enviar notificaciones de Abordo a todos los padres inmediatamente
+          for (const est of estudiantesRuta) {
+            await notificarPadre(est._id, nuevoViaje._id, 'recogido_en_casa', '🚌 ¡Abordo!', 'Su hijo ha sido recogido y va en camino a la escuela.');
+          }
+        }
+
         io.to(`sala:ruta:${id_ruta}`).emit('ruta:iniciada', {
           id_viaje: nuevoViaje._id,
           estado: 'activo',
@@ -510,7 +536,7 @@ module.exports = (io) => {
           id_viaje,
           {
             $push: { asistencias: nuevaAsistencia },
-            ...(estado === 'abordado' && { $addToSet: { estudiantes_abordo: hijo_id } }),
+            ...((estado === 'abordado' || estado === 'abordo') && { $addToSet: { estudiantes_abordo: hijo_id } }),
             ...(estado === 'ausente' && { $pull: { estudiantes_abordo: hijo_id } }),
             ...(estado === 'entregado' && { $pull: { estudiantes_abordo: hijo_id } })
           }
@@ -532,13 +558,13 @@ module.exports = (io) => {
         let mensajeNotif = '';
 
         if (tipoViaje === 'ida') {
-          if (estado === 'abordado') {
+          if (estado === 'abordado' || estado === 'abordo') {
             tipoNotificacion = 'recogido_en_casa';
             tituloNotif = '🚌 ¡Abordo!';
             mensajeNotif = 'Su hijo ha sido recogido y va en camino a la escuela.';
           }
         } else if (tipoViaje === 'vuelta') {
-          if (estado === 'abordado') {
+          if (estado === 'abordado' || estado === 'abordo') {
             tipoNotificacion = 'regreso_iniciado';
             tituloNotif = '🚌 ¡Regreso iniciado!';
             mensajeNotif = 'El conductor ya salió de la escuela con su hijo.';

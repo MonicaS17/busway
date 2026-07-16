@@ -284,13 +284,18 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         // Actualizar idViaje, tipoViaje y currentStep tras confirmación del backend (regla global)
         setIdViaje(data.id_viaje);
         setTipoViaje(data.tipo_viaje);
+        if (data.tipo_viaje === 'ida') {
+          setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'abordo' })));
+        } else {
+          setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
+        }
         setCurrentStep('ACTIVE_TRIP');
       });
       socketClient.on('asistencia:actualizada', (data) => {
         setEstudiantes(prev => prev.map(est => {
           if (est.id === data.hijo_id) {
             let estado = est.estado;
-            if (data.tipo === 'subida' || data.tipo === 'abordado') estado = 'abordo';
+            if (data.tipo === 'subida' || data.tipo === 'abordado' || data.tipo === 'abordo') estado = 'abordo';
             else if (data.tipo === 'bajada' || data.tipo === 'entregado') estado = 'entregado';
             else if (data.tipo === 'ausente') estado = 'ausente';
             return { ...est, estado };
