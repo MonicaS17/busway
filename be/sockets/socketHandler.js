@@ -127,28 +127,61 @@ module.exports = (io) => {
           return;
         }
 
-        // Validación: bloquear inicio de ruta (tanto ida como vuelta) si no hay estudiantes a bordo
         const tipoEfectivo = tipo_viaje || 'ida';
+        const inicioDia = new Date();
+        inicioDia.setHours(0, 0, 0, 0);
+
+        // Validación 1: Si es viaje de vuelta, verificar que se haya iniciado la ida en la mañana
+        if (tipoEfectivo === 'vuelta') {
+          const viajeIda = await Viaje.findOne({
+            ruta_id: id_ruta,
+            conductor_id: id_conductor,
+            tipo_viaje: 'ida',
+            createdAt: { $gte: inicioDia }
+          });
+          if (!viajeIda || viajeIda.estado === 'en_espera') {
+            socket.emit('error:servidor', {
+              codigo: 'IDA_NO_INICIADA',
+              mensaje: 'No puedes iniciar el viaje de vuelta porque no se inició el viaje de ida de esta mañana.'
+            });
+            return;
+          }
+        }
+
+        // Validación 2: Si es viaje de ida, verificar si ya se hizo uno hoy sin haber completado el de vuelta
+        if (tipoEfectivo === 'ida') {
+          const viajeIdaExistente = await Viaje.findOne({
+            ruta_id: id_ruta,
+            conductor_id: id_conductor,
+            tipo_viaje: 'ida',
+            createdAt: { $gte: inicioDia }
+          });
+
+          if (viajeIdaExistente) {
+            const viajeVueltaExistente = await Viaje.findOne({
+              ruta_id: id_ruta,
+              conductor_id: id_conductor,
+              tipo_viaje: 'vuelta',
+              createdAt: { $gte: inicioDia }
+            });
+
+            if (!viajeVueltaExistente) {
+              socket.emit('error:servidor', {
+                codigo: 'IDA_DUPLICADA',
+                mensaje: 'Ya iniciaste un viaje de ida esta mañana. Debes completar el viaje de vuelta antes de poder iniciar otro viaje de ida.'
+              });
+              return;
+            }
+          }
+        }
+
+        // Buscar si existe viaje en_espera para esta sesión
         const viajeEnEspera = await Viaje.findOne({
           ruta_id: id_ruta,
           conductor_id: id_conductor,
           tipo_viaje: tipoEfectivo,
           estado: 'en_espera'
         });
-
-        if (viajeEnEspera) {
-          const asistiendo = viajeEnEspera.asistencias.some(
-            a => a.tipo === 'subida' || a.tipo === 'abordado'
-          );
-          if (!asistiendo) {
-            console.log(`⚠️ Intento de iniciar ruta ${id_ruta} (${tipoEfectivo}) sin ningún estudiante a bordo.`);
-            socket.emit('error:servidor', {
-              codigo: 'SIN_ESTUDIANTES_ABORDO',
-              mensaje: 'No puedes iniciar el viaje si no hay ningún estudiante a bordo (todos están ausentes o sin registrar asistencia).'
-            });
-            return;
-          }
-        }
 
         // Si existe un viaje 'en_espera' huérfano (de otra ruta o tipo),
         // finalizarlo antes de permitir la nueva jornada — NO bloquear.
@@ -313,21 +346,34 @@ module.exports = (io) => {
           console.log(`✅ Viaje de ida ${viajeIda._id} cerrado automáticamente.`);
         }
 
-        // Crear el viaje de vuelta
+        // Crear el viaje de vuelta activo directamente
         const viajeVuelta = await Viaje.create({
           ruta_id: id_ruta,
           conductor_id: id_conductor,
-          estado: 'en_espera',
+          estado: 'activo',
           tipo_viaje: 'vuelta',
-          hora_salida: null
+          hora_salida: new Date()
         });
 
         console.log(`Viaje de vuelta creado bajo demanda ID: ${viajeVuelta._id}`);
 
-        // ACK con el id del nuevo viaje de vuelta
+        // Notificar a todos los padres de los niños de esta ruta que el viaje de vuelta ha iniciado
+        try {
+          const Estudiante = require('../models/Estudiante');
+          const estudiantesRuta = await Estudiante.find({ ruta_id: id_ruta, estado: 'Activo' });
+          const titulo = '🚌 Viaje de vuelta iniciado';
+          const mensaje = 'El conductor ha iniciado el viaje de regreso a casa.';
+          for (const est of estudiantesRuta) {
+            await notificarPadre(est._id, viajeVuelta._id, 'viaje_iniciado', titulo, mensaje);
+          }
+        } catch (err) {
+          console.error('Error al enviar notificaciones de inicio de viaje de vuelta:', err);
+        }
+
+        // ACK con el id del nuevo viaje de vuelta activo
         io.to(`sala:ruta:${id_ruta}`).emit('ruta:transicion_vuelta', {
           id_viaje: viajeVuelta._id,
-          estado: 'en_espera',
+          estado: 'activo',
           tipo_viaje: 'vuelta'
         });
       } catch (error) {

@@ -275,8 +275,8 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         setFaseViaje('entre_viajes'); // [E-09]
       });
       socketClient.on('ruta:transicion_vuelta', () => {
-        setRutaActiva(false);
-        setFaseViaje('entre_viajes');
+        setRutaActiva(true);
+        setFaseViaje('en_curso');
         setHijos(prev => prev.map(h => ({ ...h, estado: 'pendiente' })));
       });
     } else {
@@ -315,7 +315,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         setIdViaje(data.id_viaje);
         setTipoViaje('vuelta');
         setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
-        setCurrentStep('SCHOOL_CHECKIN');
+        setCurrentStep('ACTIVE_TRIP');
       });
 
       socketClient.on('error:servidor', (err) => {
@@ -536,24 +536,26 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
   };
 
   const comenzarAsistencia = () => {
-    // Para ambos viajes (ida y vuelta), pasamos lista antes de iniciar el viaje
-    setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
-    setCurrentStep('SCHOOL_CHECKIN');
+    if (socketRef.current && rutaData.rutaInfo) {
+      setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
+      if (tipoViaje === 'vuelta') {
+        socketRef.current.emit('ruta:crear_vuelta', {
+          id_ruta: rutaData.rutaInfo._id,
+          id_conductor: usuario._id
+        });
+      } else {
+        socketRef.current.emit('ruta:iniciar', {
+          id_ruta: rutaData.rutaInfo._id,
+          id_conductor: usuario._id,
+          tipo_viaje: 'ida'
+        });
+      }
+    }
   };
 
   const iniciarRuta = () => {
     if (socketRef.current && rutaData.rutaInfo) {
       const tipoEfectivo = tipoViaje;
-
-      const algunEstudianteAsistiendo = estudiantes.some(e => e.estado === 'abordo');
-      if (!algunEstudianteAsistiendo) {
-        Alert.alert(
-          'No se puede iniciar la ruta',
-          'No puedes iniciar la ruta si no hay ningún estudiante a bordo (todos están ausentes o sin registrar asistencia).'
-        );
-        return;
-      }
-
       socketRef.current.emit('ruta:iniciar', {
         id_ruta: rutaData.rutaInfo._id,
         id_conductor: usuario._id,
@@ -594,11 +596,15 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
     );
   };
 
-  // iniciarRutaVuelta sin emit de socket (el viaje de vuelta se crea en ruta:iniciar de forma activa)
   const iniciarRutaVuelta = () => {
     setTipoViaje('vuelta');
     setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
-    setCurrentStep('SCHOOL_CHECKIN');
+    if (socketRef.current && rutaData.rutaInfo) {
+      socketRef.current.emit('ruta:crear_vuelta', {
+        id_ruta: rutaData.rutaInfo._id,
+        id_conductor: usuario._id
+      });
+    }
   };
 
   const reiniciarJornada = () => {

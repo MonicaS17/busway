@@ -62,7 +62,9 @@ function ViajeActivoPadre({
   //Mapeo de estados visuales para la pantalla del padre
   let estadoVisual = 'esperando_ida';
 
-  if (faseViaje === 'sin_viaje') {
+  if (estadoHijo === 'ausente') {
+    estadoVisual = 'ausente';
+  } else if (faseViaje === 'sin_viaje') {
     estadoVisual = 'esperando_ida';
   } else if (faseViaje === 'entre_viajes') {
     estadoVisual = 'en_escuela';
@@ -130,6 +132,15 @@ function ViajeActivoPadre({
       colorTexto: '#fff',
       colorIcono: '#fff',
       activo: false
+    },
+    ausente: {
+      icono: 'close-circle-outline',
+      titulo: 'Ausente hoy',
+      mensaje: 'Tu hijo ha sido marcado como ausente para este viaje.',
+      colorFondo: '#FEE2E2',
+      colorTexto: '#DC2626',
+      colorIcono: '#DC2626',
+      activo: false
     }
   }[estadoVisual] || {
     icono: 'time-outline',
@@ -176,7 +187,7 @@ function ViajeActivoPadre({
         <Ionicons name={configVisual.icono} size={22} color={configVisual.colorIcono} />
       </View>
 
-      {rutaActiva && (
+      {rutaActiva && estadoHijo !== 'ausente' && (
         <>
           <Text style={styles.sectionLabel}>Ubicación del bus</Text>
           <View style={styles.mapaContainer}>
@@ -374,19 +385,23 @@ function ViajeActivoConductor({
             )}
 
             {/* Paradas de los estudiantes */}
-            {(estudiantes || []).filter(e => e.lat && e.lng).map((est, idx) => (
-              <Marker 
-                key={est.id || est._id} 
-                coordinate={{ latitude: Number(est.lat), longitude: Number(est.lng) }} 
-                title={`Parada ${est.orden || idx + 1}: ${est.nombre}`}
-                description={est.direccion || 'Punto de recogida'}
-                zIndex={10}
-              >
-                <View style={[styles.customMarkerHito, { backgroundColor: '#3B82F6', width: 28, height: 28, borderRadius: 14 }]}>
-                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>{est.orden || idx + 1}</Text>
-                </View>
-              </Marker>
-            ))}
+            {(estudiantes || []).filter(e => e.lat && e.lng).map((est, idx) => {
+              const numOrden = (!est.orden || est.orden >= 99) ? (idx + 1) : est.orden;
+              const markerBg = est.estado === 'abordo' ? '#16A34A' : (est.estado === 'ausente' ? '#DC2626' : (est.estado === 'entregado' ? '#0D1B3E' : '#3B82F6'));
+              return (
+                <Marker 
+                  key={est.id || est._id} 
+                  coordinate={{ latitude: Number(est.lat), longitude: Number(est.lng) }} 
+                  title={`Parada ${numOrden}: ${est.nombre}`}
+                  description={est.direccion || 'Punto de recogida'}
+                  zIndex={10}
+                >
+                  <View style={[styles.customMarkerHito, { backgroundColor: markerBg, width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: '#fff' }]}>
+                    <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{numOrden}</Text>
+                  </View>
+                </Marker>
+              );
+            })}
 
             {/* Destino final: Escuela */}
             <Marker 
@@ -450,64 +465,91 @@ function ViajeActivoConductor({
         {/* Listado de secuencia de paradas */}
         <Text style={styles.sectionLabel}>Secuencia de paradas</Text>
         <View style={[styles.infoCard, { marginBottom: 16, paddingVertical: 4 }]}>
-          {(estudiantes || []).map((est, idx) => (
-            <View key={est.id || est._id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: idx < estudiantes.length - 1 ? 1 : 0, borderBottomColor: '#E3ECF7' }}>
-              <View style={[styles.customMarkerHito, { backgroundColor: est.estado === 'abordo' ? '#16A34A' : (est.estado === 'ausente' ? '#DC2626' : '#3B82F6'), width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}>
-                <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{est.orden || idx + 1}</Text>
-              </View>
+          {/* Escuela al inicio si es viaje de vuelta */}
+          {tipoViaje === 'vuelta' && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }}>
+              <View style={[styles.customMarkerHito, { backgroundColor: '#10B981', width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}><Text style={{ fontSize: 11 }}>🏫</Text></View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{est.nombre}</Text>
-                <Text style={{ fontSize: 11, color: '#666' }} numberOfLines={1}>{est.direccion || 'Sin referencia registrada'}</Text>
-              </View>
-              <View style={{ backgroundColor: est.estado === 'abordo' ? '#E6F9EE' : (est.estado === 'ausente' ? '#FEE2E2' : '#FFF8E1'), paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', color: est.estado === 'abordo' ? '#16A34A' : (est.estado === 'ausente' ? '#DC2626' : '#F59E0B') }}>
-                  {est.estado === 'abordo' ? 'A Bordo' : (est.estado === 'ausente' ? 'Ausente' : 'Pendiente')}
-                </Text>
-              </View>
-              {/* Acciones manuales en línea */}
-              <View style={{ flexDirection: 'row', gap: 6, marginLeft: 10 }}>
-                {tipoViaje === 'ida' ? (
-                  <>
-                    {est.estado === 'pendiente' && (
-                      <>
-                        <TouchableOpacity 
-                          style={{ backgroundColor: '#16A34A', padding: 6, borderRadius: 6 }} 
-                          onPress={() => marcarEstado(est.id, 'abordo')}
-                        >
-                          <Ionicons name="checkmark" size={14} color="#fff" />
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={{ backgroundColor: '#DC2626', padding: 6, borderRadius: 6 }} 
-                          onPress={() => marcarEstado(est.id, 'ausente')}
-                        >
-                          <Ionicons name="close" size={14} color="#fff" />
-                        </TouchableOpacity>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {est.estado === 'abordo' && (
-                      <TouchableOpacity 
-                        style={{ backgroundColor: '#0D1B3E', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }} 
-                        onPress={() => marcarEstado(est.id, 'entregado')}
-                      >
-                        <Ionicons name="hand-left-outline" size={12} color="#fff" />
-                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Entregar</Text>
-                      </TouchableOpacity>
-                    )}
-                  </>
-                )}
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{rutaInfo?.escuela || 'Escuela (Punto de Salida)'}</Text>
+                <Text style={{ fontSize: 11, color: '#666' }}>Salida de la ruta escolar</Text>
               </View>
             </View>
-          ))}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: '#E3ECF7' }}>
-            <View style={[styles.customMarkerHito, { backgroundColor: '#10B981', width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}><Text style={{ fontSize: 11 }}>🏫</Text></View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{rutaInfo?.escuela || 'Escuela (Destino Final)'}</Text>
-              <Text style={{ fontSize: 11, color: '#666' }}>Llegada de la ruta escolar</Text>
+          )}
+
+          {(estudiantes || []).map((est, idx) => {
+            const numOrden = (!est.orden || est.orden >= 99) ? (idx + 1) : est.orden;
+            
+            // Mapeo completo de estados para el conductor (incluye entregado)
+            const statusCfg = {
+              pendiente: { label: 'Pendiente', color: '#F59E0B', bg: '#FFF8E1' },
+              abordo: { label: 'A Bordo', color: '#16A34A', bg: '#E6F9EE' },
+              ausente: { label: 'Ausente', color: '#DC2626', bg: '#FEE2E2' },
+              entregado: { label: 'Entregado', color: '#0D1B3E', bg: '#E2E8F0' }
+            }[est.estado] || { label: 'Pendiente', color: '#F59E0B', bg: '#FFF8E1' };
+
+            return (
+              <View key={est.id || est._id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: idx < estudiantes.length - 1 ? 1 : 0, borderBottomColor: '#E3ECF7' }}>
+                <View style={[styles.customMarkerHito, { backgroundColor: est.estado === 'abordo' ? '#16A34A' : (est.estado === 'ausente' ? '#DC2626' : (est.estado === 'entregado' ? '#0D1B3E' : '#3B82F6')), width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}>
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{numOrden}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{est.nombre}</Text>
+                  <Text style={{ fontSize: 11, color: '#666' }} numberOfLines={1}>{est.direccion || 'Sin referencia registrada'}</Text>
+                </View>
+                <View style={{ backgroundColor: statusCfg.bg, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: statusCfg.color }}>
+                    {statusCfg.label}
+                  </Text>
+                </View>
+                {/* Acciones manuales en línea */}
+                <View style={{ flexDirection: 'row', gap: 6, marginLeft: 10 }}>
+                  {tipoViaje === 'ida' ? (
+                    <>
+                      {est.estado === 'pendiente' && (
+                        <>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#16A34A', padding: 6, borderRadius: 6 }} 
+                            onPress={() => marcarEstado(est.id, 'abordo')}
+                          >
+                            <Ionicons name="checkmark" size={14} color="#fff" />
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#DC2626', padding: 6, borderRadius: 6 }} 
+                            onPress={() => marcarEstado(est.id, 'ausente')}
+                          >
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {est.estado === 'abordo' && (
+                        <TouchableOpacity 
+                          style={{ backgroundColor: '#0D1B3E', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }} 
+                          onPress={() => marcarEstado(est.id, 'entregado')}
+                        >
+                          <Ionicons name="hand-left-outline" size={12} color="#fff" />
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Entregar</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+
+          {/* Escuela al final si es viaje de ida */}
+          {tipoViaje === 'ida' && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: '#E3ECF7' }}>
+              <View style={[styles.customMarkerHito, { backgroundColor: '#10B981', width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}><Text style={{ fontSize: 11 }}>🏫</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{rutaInfo?.escuela || 'Escuela (Destino Final)'}</Text>
+                <Text style={{ fontSize: 11, color: '#666' }}>Llegada de la ruta escolar</Text>
+              </View>
             </View>
-          </View>
+          )}
         </View>
 
         {estudianteActual && <IndicadorParada tipoViaje={tipoViaje} student={estudianteActual} />}
