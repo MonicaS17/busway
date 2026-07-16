@@ -65,16 +65,34 @@ router.get('/:id/perfil', verifyToken, async (req, res) => {
   }
 });
 
-// GET estudiantes asignados a este conductor
+// GET estudiantes del conductor autenticado
 router.get('/estudiantes', verifyToken, async (req, res) => {
   try {
     const usuario = await conductorAutenticado(req, res);
     if (!usuario) return;
     const estudiantes = await Estudiante.find({ conductor_id: usuario._id })
-      .populate('padre_id', 'nombre apellido correo')
+      .populate('padre_id', 'nombre apellido correo ubicacion')
       .populate('ruta_id', 'nombre escuela zona')
       .sort({ nombre: 1 });
-    res.json({ estudiantes });
+
+    const mappedEst = estudiantes.map(est => {
+      const estDoc = est.toObject();
+      if (est.padre_id) {
+        estDoc.lat = est.padre_id.ubicacion?.lat || estDoc.lat || null;
+        estDoc.lng = est.padre_id.ubicacion?.lng || estDoc.lng || null;
+        
+        const parts = [
+          est.padre_id.ubicacion?.provincia,
+          est.padre_id.ubicacion?.distrito,
+          est.padre_id.ubicacion?.corregimiento,
+          est.padre_id.ubicacion?.numero_casa
+        ].filter(Boolean);
+        estDoc.direccion = parts.length > 0 ? parts.join(', ') : (estDoc.direccion || 'Sin ubicación de recogida');
+      }
+      return estDoc;
+    });
+
+    res.json({ estudiantes: mappedEst });
   } catch (error) {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
@@ -134,7 +152,7 @@ router.get('/ruta', verifyToken, async (req, res) => {
     }
     let activeEstudiantes = [];
     if (activeRuta) {
-      const studentsFromDb = await Estudiante.find({ conductor_id: usuario._id, ruta_id: activeRuta._id });
+      const studentsFromDb = await Estudiante.find({ conductor_id: usuario._id, ruta_id: activeRuta._id }).populate('padre_id', 'ubicacion');
       const orderMap = {};
       const rawRuta = rutas.find(r => String(r._id) === String(activeRuta._id));
       if (rawRuta && rawRuta.estudiantes) {
@@ -145,6 +163,18 @@ router.get('/ruta', verifyToken, async (req, res) => {
       activeEstudiantes = studentsFromDb.map(student => {
         const doc = student.toObject();
         doc.orden = orderMap[String(student._id)] !== undefined ? orderMap[String(student._id)] : 999;
+        if (student.padre_id) {
+          doc.lat = student.padre_id.ubicacion?.lat || doc.lat || null;
+          doc.lng = student.padre_id.ubicacion?.lng || doc.lng || null;
+          
+          const parts = [
+            student.padre_id.ubicacion?.provincia,
+            student.padre_id.ubicacion?.distrito,
+            student.padre_id.ubicacion?.corregimiento,
+            student.padre_id.ubicacion?.numero_casa
+          ].filter(Boolean);
+          doc.direccion = parts.length > 0 ? parts.join(', ') : (doc.direccion || 'Sin ubicación de recogida');
+        }
         return doc;
       }).sort((a, b) => a.orden - b.orden);
     }
@@ -176,16 +206,28 @@ router.get('/ruta/:rutaId', verifyToken, async (req, res) => {
       doc.horario = doc.horario || '6:30 AM — 7:15 AM';
     }
 
-    const studentsFromDb = await Estudiante.find({ conductor_id: usuario._id, ruta_id: req.params.rutaId });
+    const studentsFromDb = await Estudiante.find({ conductor_id: usuario._id, ruta_id: req.params.rutaId }).populate('padre_id', 'ubicacion');
     const orderMap = {};
     if (ruta.estudiantes) {
       ruta.estudiantes.forEach(item => {
         orderMap[String(item.estudiante_id)] = item.orden;
       });
     }
-    const sortedStudents = studentsFromDb.map(student => {
+    const sortedStudents = sortedStudentsMapping = studentsFromDb.map(student => {
       const sDoc = student.toObject();
       sDoc.orden = orderMap[String(student._id)] !== undefined ? orderMap[String(student._id)] : 999;
+      if (student.padre_id) {
+        sDoc.lat = student.padre_id.ubicacion?.lat || sDoc.lat || null;
+        sDoc.lng = student.padre_id.ubicacion?.lng || sDoc.lng || null;
+        
+        const parts = [
+          student.padre_id.ubicacion?.provincia,
+          student.padre_id.ubicacion?.distrito,
+          student.padre_id.ubicacion?.corregimiento,
+          student.padre_id.ubicacion?.numero_casa
+        ].filter(Boolean);
+        sDoc.direccion = parts.length > 0 ? parts.join(', ') : (sDoc.direccion || 'Sin ubicación de recogida');
+      }
       return sDoc;
     }).sort((a, b) => a.orden - b.orden);
 
@@ -204,7 +246,7 @@ router.post('/ruta', verifyToken, async (req, res) => {
     const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
     if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    const { escuela_id, nombre_ruta, zona, horario_salida, horario_llegada, frecuencia } = req.body;
+    const { escuela_id, nombre_ruta, zona, horario_salida, horario_llegada, frecuencia, escuela_lat, escuela_lng, hora_salida_vuelta } = req.body;
 
     if (!escuela_id || !nombre_ruta || !zona || !horario_salida || !horario_llegada) {
       return res.status(400).json({ error: 'Faltan campos obligatorios: escuela_id, nombre_ruta, zona, horario_salida, horario_llegada' });
@@ -213,11 +255,59 @@ router.post('/ruta', verifyToken, async (req, res) => {
     const escuelaExiste = await Escuela.findById(escuela_id);
     if (!escuelaExiste) return res.status(400).json({ error: 'La escuela especificada no existe' });
 
+    // Validar coincidencia provincial con la placa del bus del conductor
+    const Vehiculo = require('../models/Vehiculo');
+    const vehiculo = await Vehiculo.findOne({ conductor_id: usuario._id });
+    if (!vehiculo || !vehiculo.placa) {
+      return res.status(400).json({ error: 'No tienes un vehículo registrado con número de placa en BusWay.' });
+    }
+
+    const obtenerProvinciaPorPlaca = (placa) => {
+      if (!placa) return null;
+      const match = placa.match(/^(\d{1,2})BC/i);
+      if (!match) return null;
+      const num = parseInt(match[1], 10);
+      switch (num) {
+        case 1: return 'Bocas del Toro';
+        case 2: return 'Coclé';
+        case 3: return 'Colón';
+        case 4: return 'Chiriquí';
+        case 5: return 'Darién';
+        case 6: return 'Herrera';
+        case 7: return 'Los Santos';
+        case 8: return 'Panamá';
+        case 9: return 'Veraguas';
+        case 10: return 'Guna Yala';
+        case 11: return 'Ngäbe-Buglé';
+        case 12: return 'Emberá-Wounaan';
+        case 13: return 'Panamá Oeste';
+        default: return null;
+      }
+    };
+
+    const provinciaConductor = obtenerProvinciaPorPlaca(vehiculo.placa);
+    if (!provinciaConductor) {
+      return res.status(400).json({ error: 'El formato de tu placa de bus no corresponde a una provincia válida.' });
+    }
+
+    if (escuelaExiste.provincia !== provinciaConductor) {
+      return res.status(400).json({ error: `Tu placa de colegial (${vehiculo.placa}) solo te autoriza a crear rutas en la provincia de ${provinciaConductor}. La escuela seleccionada pertenece a ${escuelaExiste.provincia}.` });
+    }
+
     let freqArray = frecuencia || ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
     if (typeof freqArray === 'string') {
       if (freqArray === 'Lunes a Viernes') freqArray = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
       else if (freqArray === 'Todos los días') freqArray = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
       else freqArray = [freqArray];
+    }
+
+    // Verificar si ya existe una ruta del mismo conductor con el mismo horario de salida
+    const rutaExistente = await Ruta.findOne({
+      conductor_id: usuario._id,
+      horario_salida: horario_salida
+    });
+    if (rutaExistente) {
+      return res.status(400).json({ error: `Ya tienes otra ruta programada a las ${horario_salida}.` });
     }
 
     const nuevaRuta = new Ruta({
@@ -232,6 +322,9 @@ router.post('/ruta', verifyToken, async (req, res) => {
       estudiantes: [],
       escuela: escuelaExiste.nombre,
       nombre: nombre_ruta,
+      escuela_lat: escuela_lat || null,
+      escuela_lng: escuela_lng || null,
+      hora_salida_vuelta: hora_salida_vuelta || null
     });
 
     await nuevaRuta.save();
@@ -260,19 +353,69 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para modificar esta ruta' });
     }
 
-    const { escuela_id, nombre_ruta, escuela, zona, horario_salida, horario_llegada, frecuencia, estado } = req.body;
+    const { escuela_id, nombre_ruta, escuela, zona, horario_salida, horario_llegada, frecuencia, estado, escuela_lat, escuela_lng, hora_salida_vuelta } = req.body;
 
     if (escuela_id !== undefined) {
       const Escuela = mongoose.model('escuelas');
       const escuelaExiste = await Escuela.findById(escuela_id);
       if (!escuelaExiste) return res.status(400).json({ error: 'La escuela especificada no existe' });
+
+      // Validar coincidencia provincial con la placa del bus del conductor
+      const Vehiculo = require('../models/Vehiculo');
+      const vehiculo = await Vehiculo.findOne({ conductor_id: usuario._id });
+      if (!vehiculo || !vehiculo.placa) {
+        return res.status(400).json({ error: 'No tienes un vehículo registrado con número de placa en BusWay.' });
+      }
+
+      const obtenerProvinciaPorPlaca = (placa) => {
+        if (!placa) return null;
+        const match = placa.match(/^(\d{1,2})BC/i);
+        if (!match) return null;
+        const num = parseInt(match[1], 10);
+        switch (num) {
+          case 1: return 'Bocas del Toro';
+          case 2: return 'Coclé';
+          case 3: return 'Colón';
+          case 4: return 'Chiriquí';
+          case 5: return 'Darién';
+          case 6: return 'Herrera';
+          case 7: return 'Los Santos';
+          case 8: return 'Panamá';
+          case 9: return 'Veraguas';
+          case 10: return 'Guna Yala';
+          case 11: return 'Ngäbe-Buglé';
+          case 12: return 'Emberá-Wounaan';
+          case 13: return 'Panamá Oeste';
+          default: return null;
+        }
+      };
+
+      const provinciaConductor = obtenerProvinciaPorPlaca(vehiculo.placa);
+      if (!provinciaConductor) {
+        return res.status(400).json({ error: 'El formato de tu placa de bus no corresponde a una provincia válida.' });
+      }
+
+      if (escuelaExiste.provincia !== provinciaConductor) {
+        return res.status(400).json({ error: `Tu placa de colegial (${vehiculo.placa}) solo te autoriza a modificar rutas en la provincia de ${provinciaConductor}. La escuela seleccionada pertenece a ${escuelaExiste.provincia}.` });
+      }
+
       ruta.escuela_id = escuela_id;
       ruta.escuela = escuelaExiste.nombre;
     }
     if (nombre_ruta !== undefined) { ruta.nombre_ruta = nombre_ruta; ruta.nombre = nombre_ruta; }
     if (escuela !== undefined) ruta.escuela = escuela;
     if (zona !== undefined) ruta.zona = zona;
-    if (horario_salida !== undefined) ruta.horario_salida = horario_salida;
+    if (horario_salida !== undefined) {
+      const rutaExistente = await Ruta.findOne({
+        conductor_id: usuario._id,
+        horario_salida: horario_salida,
+        _id: { $ne: req.params.rutaId }
+      });
+      if (rutaExistente) {
+        return res.status(400).json({ error: `Ya tienes otra ruta programada a las ${horario_salida}.` });
+      }
+      ruta.horario_salida = horario_salida;
+    }
     if (horario_llegada !== undefined) ruta.horario_llegada = horario_llegada;
     if (frecuencia !== undefined) {
       let freqArray = frecuencia;
@@ -284,6 +427,9 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
       ruta.frecuencia = freqArray;
     }
     if (estado !== undefined) ruta.estado = estado;
+    if (escuela_lat !== undefined) ruta.escuela_lat = escuela_lat;
+    if (escuela_lng !== undefined) ruta.escuela_lng = escuela_lng;
+    if (hora_salida_vuelta !== undefined) ruta.hora_salida_vuelta = hora_salida_vuelta;
 
     await ruta.save();
 
@@ -347,7 +493,7 @@ router.get('/:id/ruta', verifyToken, async (req, res) => {
       doc.horario = doc.horario || '6:30 AM — 7:15 AM';
     }
 
-    const studentsFromDb = await Estudiante.find({ conductor_id: req.params.id, ruta_id: ruta._id });
+    const studentsFromDb = await Estudiante.find({ conductor_id: req.params.id, ruta_id: ruta._id }).populate('padre_id', 'ubicacion');
     const orderMap = {};
     if (ruta.estudiantes) {
       ruta.estudiantes.forEach(item => {
@@ -357,6 +503,18 @@ router.get('/:id/ruta', verifyToken, async (req, res) => {
     const sortedStudents = studentsFromDb.map(student => {
       const sDoc = student.toObject();
       sDoc.orden = orderMap[String(student._id)] !== undefined ? orderMap[String(student._id)] : 999;
+      if (student.padre_id) {
+        sDoc.lat = student.padre_id.ubicacion?.lat || sDoc.lat || null;
+        sDoc.lng = student.padre_id.ubicacion?.lng || sDoc.lng || null;
+        
+        const parts = [
+          student.padre_id.ubicacion?.provincia,
+          student.padre_id.ubicacion?.distrito,
+          student.padre_id.ubicacion?.corregimiento,
+          student.padre_id.ubicacion?.numero_casa
+        ].filter(Boolean);
+        sDoc.direccion = parts.length > 0 ? parts.join(', ') : (sDoc.direccion || 'Sin ubicación de recogida');
+      }
       return sDoc;
     }).sort((a, b) => a.orden - b.orden);
 

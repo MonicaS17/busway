@@ -19,6 +19,9 @@ const RutaSchema = new mongoose.Schema({
   horario_llegada: { type: String },
   frecuencia: { type: [String], default: ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"] },
   estado: { type: String, enum: ['activa', 'inactiva'], default: 'activa' },
+  escuela_lat: { type: Number },
+  escuela_lng: { type: Number },
+  hora_salida_vuelta: { type: String },
   estudiantes: [{
     estudiante_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Estudiante' },
     orden: { type: Number }

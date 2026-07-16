@@ -40,6 +40,35 @@ router.post('/', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Conductor no encontrado' });
     }
 
+    // Validar si el padre ya tiene una solicitud activa (pendiente/aceptada) con este conductor
+    const solicitudExistente = await Solicitud.findOne({
+      padre_id: padre._id,
+      conductor_id,
+      estado: { $in: ['pendiente', 'aceptada'] }
+    });
+    if (solicitudExistente) {
+      return res.status(400).json({ error: 'Ya tienes una solicitud pendiente o aceptada con este conductor.' });
+    }
+
+    // Validar si el padre ya tiene un contrato activo con este conductor
+    const acuerdoExistente = await Acuerdo.findOne({
+      padre_id: padre._id,
+      conductor_id,
+      estado: 'activo'
+    });
+    if (acuerdoExistente) {
+      return res.status(400).json({ error: 'Ya tienes un contrato activo con este conductor.' });
+    }
+
+    // Validar si el padre ya tiene algún hijo asignado a este conductor
+    const estudianteAsignado = await Estudiante.findOne({
+      padre_id: padre._id,
+      conductor_id
+    });
+    if (estudianteAsignado) {
+      return res.status(400).json({ error: 'Ya tienes a uno o más de tus hijos asignados a este conductor.' });
+    }
+
     const hijos = await Estudiante.find({ _id: { $in: hijos_ids }, padre_id: padre._id });
     if (hijos.length !== hijos_ids.length) {
       return res.status(400).json({ error: 'Uno o más hijos no te pertenecen o no existen' });
@@ -126,6 +155,16 @@ router.patch('/:id/aceptar', verifyToken, async (req, res) => {
     }
     if (solicitud.estado !== 'pendiente') {
       return res.status(400).json({ error: 'Esta solicitud ya fue procesada' });
+    }
+
+    // Validar información de cobro (banco/tarjeta) del conductor
+    const tieneCobroConfigurado = conductor.datos_conductor?.banco_info &&
+                                  conductor.datos_conductor.banco_info.banco_nombre &&
+                                  conductor.datos_conductor.banco_info.num_cuenta;
+    if (!tieneCobroConfigurado) {
+      return res.status(400).json({
+        error: 'No puedes aceptar solicitudes sin configurar primero tu información de cobro (banco o tarjeta) en la sección de Pagos.'
+      });
     }
 
     // Validar capacidad de asientos del vehículo

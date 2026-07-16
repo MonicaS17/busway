@@ -99,6 +99,18 @@ module.exports = (io) => {
     // ─── INICIO DE RUTA POR EL CONDUCTOR ─────────────────────────────────────────
     socket.on('ruta:iniciar', async ({ id_ruta, id_conductor, tipo_viaje }) => {
       try {
+        const Estudiante = require('../models/Estudiante');
+        const estudiantesRuta = await Estudiante.find({ ruta_id: id_ruta, estado: 'Activo' });
+
+        if (estudiantesRuta.length === 0) {
+          console.warn(`⚠️ Intento de iniciar ruta ${id_ruta} sin ningún estudiante registrado.`);
+          socket.emit('error:servidor', {
+            codigo: 'SIN_ESTUDIANTES_REGISTRADOS',
+            mensaje: 'No puedes iniciar el viaje porque no tienes ningún estudiante registrado en esta ruta.'
+          });
+          return;
+        }
+
         // Bloqueo estricto: solo bloquear si existe un viaje 'activo' para este conductor
         const viajeActivo = await Viaje.findOne({
           conductor_id: id_conductor,
@@ -115,11 +127,35 @@ module.exports = (io) => {
           return;
         }
 
-        // Si existe un viaje 'en_espera' (viaje de vuelta huérfano de una jornada anterior),
+        // Validación: bloquear inicio de ruta (tanto ida como vuelta) si no hay estudiantes a bordo
+        const tipoEfectivo = tipo_viaje || 'ida';
+        const viajeEnEspera = await Viaje.findOne({
+          ruta_id: id_ruta,
+          conductor_id: id_conductor,
+          tipo_viaje: tipoEfectivo,
+          estado: 'en_espera'
+        });
+
+        if (viajeEnEspera) {
+          const asistiendo = viajeEnEspera.asistencias.some(
+            a => a.tipo === 'subida' || a.tipo === 'abordado'
+          );
+          if (!asistiendo) {
+            console.log(`⚠️ Intento de iniciar ruta ${id_ruta} (${tipoEfectivo}) sin ningún estudiante a bordo.`);
+            socket.emit('error:servidor', {
+              codigo: 'SIN_ESTUDIANTES_ABORDO',
+              mensaje: 'No puedes iniciar el viaje si no hay ningún estudiante a bordo (todos están ausentes o sin registrar asistencia).'
+            });
+            return;
+          }
+        }
+
+        // Si existe un viaje 'en_espera' huérfano (de otra ruta o tipo),
         // finalizarlo antes de permitir la nueva jornada — NO bloquear.
         const viajeEnEsperaHuerfano = await Viaje.findOne({
           conductor_id: id_conductor,
-          estado: 'en_espera'
+          estado: 'en_espera',
+          _id: { $ne: viajeEnEspera?._id }
         });
 
         if (viajeEnEsperaHuerfano) {
@@ -130,26 +166,33 @@ module.exports = (io) => {
           });
         }
 
-        const nuevoViaje = await Viaje.create({
-          ruta_id: id_ruta,
-          conductor_id: id_conductor,
-          estado: 'activo',
-          tipo_viaje: tipo_viaje || 'ida',
-          hora_salida: new Date()
-        });
-
-        console.log(`▶️ Viaje iniciado ID: ${nuevoViaje._id} (${tipo_viaje || 'ida'})`);
+        // Si existe el viaje en_espera para esta sesión, activarlo; si no, crearlo directamente
+        let nuevoViaje;
+        if (viajeEnEspera) {
+          nuevoViaje = await Viaje.findByIdAndUpdate(viajeEnEspera._id, {
+            estado: 'activo',
+            hora_salida: new Date()
+          }, { new: true });
+          console.log(`▶️ Viaje en_espera activado ID: ${nuevoViaje._id} (${tipoEfectivo})`);
+        } else {
+          nuevoViaje = await Viaje.create({
+            ruta_id: id_ruta,
+            conductor_id: id_conductor,
+            estado: 'activo',
+            tipo_viaje: tipoEfectivo,
+            hora_salida: new Date()
+          });
+          console.log(`▶️ Nuevo viaje creado ID: ${nuevoViaje._id} (${tipoEfectivo})`);
+        }
 
         io.to(`sala:ruta:${id_ruta}`).emit('ruta:iniciada', {
           id_viaje: nuevoViaje._id,
           estado: 'activo',
-          tipo_viaje: tipo_viaje || 'ida'
+          tipo_viaje: tipoEfectivo
         });
 
         // Notificar a todos los padres de los niños de esta ruta que el viaje ha iniciado
         try {
-          const estudiantesRuta = await Estudiante.find({ ruta_id: id_ruta, estado: 'Activo' });
-          const tipoEfectivo = tipo_viaje || 'ida';
           const titulo = tipoEfectivo === 'vuelta' ? '🚌 Viaje de vuelta iniciado' : '🚌 Viaje de ida iniciado';
           const mensaje = tipoEfectivo === 'vuelta'
             ? 'El conductor ha iniciado el viaje de regreso a casa.'

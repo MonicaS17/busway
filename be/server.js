@@ -51,6 +51,32 @@ app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json({ limit: '1mb' })) 
 
+// Middleware de logging de peticiones y errores (cero dependencias externas)
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const status = res.statusCode;
+    let icon = 'ℹ️';
+    if (status >= 500) {
+      icon = '🔴';
+    } else if (status >= 400) {
+      icon = '⚠️';
+    } else if (status >= 200 && status < 300) {
+      icon = '🟢';
+    }
+    console.log(`${icon} [${req.method}] ${req.originalUrl} - Estado: ${status} (${duration}ms)`);
+    
+    // Si hay un error (estado >= 400), imprimimos detalles para depuración
+    if (status >= 400) {
+      if (req.body && Object.keys(req.body).length > 0) {
+        console.log(`   └─ Body enviado:`, JSON.stringify(req.body));
+      }
+    }
+  });
+  next();
+});
+
 // Rutas base de la API
 app.use('/api/auth', authRoutes);
 app.use('/api/viajes', viajesRoutes);

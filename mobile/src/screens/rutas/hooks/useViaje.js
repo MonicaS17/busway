@@ -285,11 +285,17 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         }
         vueltaRetryCountRef.current = 0;
 
-        // Actualizar estado local tras confirmación del backend
         setIdViaje(data.id_viaje);
         setTipoViaje('vuelta');
         setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
         setCurrentStep('SCHOOL_CHECKIN');
+      });
+
+      socketClient.on('error:servidor', (err) => {
+        Alert.alert(
+          err.codigo === 'SIN_ESTUDIANTES_ABORDO' || err.codigo === 'SIN_ESTUDIANTES_REGISTRADOS' ? 'Aviso' : 'Error',
+          err.mensaje || 'Error en el servidor'
+        );
       });
     }
 
@@ -475,37 +481,22 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
   };
 
   const comenzarAsistencia = () => {
-    if (tipoViaje === 'vuelta') {
-      // Para el retorno (vuelta), pasamos lista antes de iniciar el viaje
-      setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
-      setCurrentStep('SCHOOL_CHECKIN');
-    } else {
-      // Para la ida, se inicia el viaje directamente
-      if (socketRef.current && rutaData.rutaInfo) {
-        socketRef.current.emit('ruta:iniciar', {
-          id_ruta: rutaData.rutaInfo._id,
-          id_conductor: usuario._id,
-          tipo_viaje: tipoViaje
-        });
-      }
-    }
+    // Para ambos viajes (ida y vuelta), pasamos lista antes de iniciar el viaje
+    setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
+    setCurrentStep('SCHOOL_CHECKIN');
   };
 
   const iniciarRuta = () => {
     if (socketRef.current && rutaData.rutaInfo) {
-      // Si se llama desde SCHOOL_CHECKIN el tipo es siempre 'vuelta',
-      // independientemente del valor reactivo de tipoViaje en ese momento.
-      const tipoEfectivo = currentStep === 'SCHOOL_CHECKIN' ? 'vuelta' : tipoViaje;
+      const tipoEfectivo = tipoViaje;
 
-      if (tipoEfectivo === 'vuelta') {
-        const algunEstudianteAsistiendo = estudiantes.some(e => e.estado === 'abordo');
-        if (!algunEstudianteAsistiendo) {
-          Alert.alert(
-            'No se puede iniciar la ruta',
-            'No puedes iniciar la ruta de regreso si no hay ningún estudiante a bordo (todos están ausentes o sin registrar asistencia).'
-          );
-          return;
-        }
+      const algunEstudianteAsistiendo = estudiantes.some(e => e.estado === 'abordo');
+      if (!algunEstudianteAsistiendo) {
+        Alert.alert(
+          'No se puede iniciar la ruta',
+          'No puedes iniciar la ruta si no hay ningún estudiante a bordo (todos están ausentes o sin registrar asistencia).'
+        );
+        return;
       }
 
       socketRef.current.emit('ruta:iniciar', {
@@ -513,10 +504,6 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         id_conductor: usuario._id,
         tipo_viaje: tipoEfectivo
       });
-      // Asegurar que el estado local refleja el tipo correcto
-      if (tipoEfectivo !== tipoViaje) {
-        setTipoViaje(tipoEfectivo);
-      }
     }
   };
 

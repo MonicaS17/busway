@@ -362,6 +362,17 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores,
   const [busqueda, setBusqueda] = useState('');
   const [conductorSeleccionado, setConductorSeleccionado] = useState(null);
 
+  const intentarSolicitar = (conductor) => {
+    if (!hijos || hijos.length === 0) {
+      Alert.alert(
+        'Sin estudiantes registrados',
+        'Debes registrar al menos un hijo en la sección correspondiente antes de poder enviar solicitudes a conductores.'
+      );
+      return;
+    }
+    setConductorSeleccionado(conductor);
+  };
+
   const conductoresMapeados = conductores.map(c => ({
     _id: c._id,
     nombre: c.nombre + ' ' + (c.apellido || ''),
@@ -570,7 +581,7 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores,
                     <CardConductor
                       key={conductor._id}
                       conductor={conductor}
-                      onSolicitar={() => setConductorSeleccionado(conductor)}
+                      onSolicitar={() => intentarSolicitar(conductor)}
                     />
                   ))}
                 </>
@@ -595,7 +606,7 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores,
                     <CardConductor
                       key={conductor._id}
                       conductor={conductor}
-                      onSolicitar={() => setConductorSeleccionado(conductor)}
+                      onSolicitar={() => intentarSolicitar(conductor)}
                     />
                   ))}
                 </>
