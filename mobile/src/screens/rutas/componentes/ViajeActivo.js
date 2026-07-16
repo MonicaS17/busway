@@ -160,7 +160,7 @@ function ViajeActivoPadre({
     },
     entregado_vuelta: {
       icono: 'home-outline',
-      titulo: 'Ruta iniciada',
+      titulo: 'Ruta finalizada',
       mensaje: 'Llegada a casa',
       colorFondo: '#10B981',
       colorTexto: '#fff',

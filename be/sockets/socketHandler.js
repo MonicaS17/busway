@@ -406,7 +406,7 @@ module.exports = (io) => {
         const ahora = new Date();
 
         // Verificar si ya existe un registro para este estudiante en este viaje con el mismo tipo
-        const viajeActual = await Viaje.findById(id_viaje, { asistencias: 1 });
+        const viajeActual = await Viaje.findById(id_viaje, { asistencias: 1, tipo_viaje: 1 });
         if (!viajeActual) {
           console.warn(`⚠️ Viaje ${id_viaje} no encontrado para registrar asistencia.`);
           return;
@@ -494,7 +494,7 @@ module.exports = (io) => {
         const tipoEfectivo = tipo || 'subida';
 
         // Verificar si ya existe un registro con el mismo hijo_id y tipo en este viaje
-        const viajeActual = await Viaje.findById(id_viaje, { asistencias: 1 });
+        const viajeActual = await Viaje.findById(id_viaje, { asistencias: 1, tipo_viaje: 1 });
         if (!viajeActual) {
           console.warn(`⚠️ Viaje ${id_viaje} no encontrado para registrar asistencia manual.`);
           return;

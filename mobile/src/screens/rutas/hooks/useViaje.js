@@ -130,7 +130,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         setIdViaje(activeTrip._id);
       } else {
         setIdViaje(null);
-        if (rutaData.faseViaje === 'entre_viajes') {
+        if (rutaData.faseViaje === 'entre_viajes' || rutaData.faseViaje === 'jornada_completa') {
           setTipoViaje('vuelta');
         } else {
           setTipoViaje('ida');
@@ -274,9 +274,11 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         setRutaActiva(false);
         setFaseViaje('entre_viajes'); // [E-09]
       });
-      socketClient.on('ruta:transicion_vuelta', () => {
+      socketClient.on('ruta:transicion_vuelta', (data) => {
         setRutaActiva(true);
         setFaseViaje('en_curso');
+        setTipoViaje('vuelta');
+        setIdViaje(data?.id_viaje || null);
         setHijos(prev => prev.map(h => ({ ...h, estado: 'pendiente' })));
       });
     } else {
