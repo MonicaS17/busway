@@ -341,7 +341,7 @@ function ViajeActivoConductor({
 
   const estudianteActual = tipoViaje === 'ida'
     ? estudiantes.find(e => e.estado === 'pendiente')
-    : estudiantes.find(e => e.estado === 'abordo');
+    : (estudiantes.find(e => e.estado === 'pendiente') || estudiantes.find(e => e.estado === 'abordo'));
 
   const regionMapa = posicionBus
     ? {
@@ -521,16 +521,56 @@ function ViajeActivoConductor({
                           </TouchableOpacity>
                         </>
                       )}
+                      {est.estado === 'ausente' && (
+                        <TouchableOpacity 
+                          style={{ backgroundColor: '#16A34A', padding: 6, borderRadius: 6 }} 
+                          onPress={() => marcarEstado(est.id, 'abordo')}
+                        >
+                          <Ionicons name="checkmark" size={14} color="#fff" />
+                        </TouchableOpacity>
+                      )}
                     </>
                   ) : (
                     <>
+                      {est.estado === 'pendiente' && (
+                        <>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#16A34A', padding: 6, borderRadius: 6 }} 
+                            onPress={() => marcarEstado(est.id, 'abordo')}
+                          >
+                            <Ionicons name="checkmark" size={14} color="#fff" />
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#DC2626', padding: 6, borderRadius: 6 }} 
+                            onPress={() => marcarEstado(est.id, 'ausente')}
+                          >
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </>
+                      )}
                       {est.estado === 'abordo' && (
+                        <>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#0D1B3E', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }} 
+                            onPress={() => marcarEstado(est.id, 'entregado')}
+                          >
+                            <Ionicons name="hand-left-outline" size={12} color="#fff" />
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Entregar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#DC2626', padding: 6, borderRadius: 6 }} 
+                            onPress={() => marcarEstado(est.id, 'ausente')}
+                          >
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {est.estado === 'ausente' && (
                         <TouchableOpacity 
-                          style={{ backgroundColor: '#0D1B3E', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }} 
-                          onPress={() => marcarEstado(est.id, 'entregado')}
+                          style={{ backgroundColor: '#16A34A', padding: 6, borderRadius: 6 }} 
+                          onPress={() => marcarEstado(est.id, 'abordo')}
                         >
-                          <Ionicons name="hand-left-outline" size={12} color="#fff" />
-                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Entregar</Text>
+                          <Ionicons name="checkmark" size={14} color="#fff" />
                         </TouchableOpacity>
                       )}
                     </>
@@ -554,7 +594,7 @@ function ViajeActivoConductor({
 
         {estudianteActual && <IndicadorParada tipoViaje={tipoViaje} student={estudianteActual} />}
 
-        {estudianteActual ? (
+         {estudianteActual ? (
           <View style={styles.seccionAccion}>
             {tipoViaje === 'ida' ? (
               <>
@@ -571,10 +611,26 @@ function ViajeActivoConductor({
             ) : (
               <>
                 <TarjetaEstudiante student={estudianteActual} />
-                <View style={{ flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                  <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#0D1B3E' }]} onPress={() => marcarEstado(estudianteActual.id, 'entregado')}>
-                    <Ionicons name="hand-left-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>Entregar estudiante</Text>
-                  </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                  {estudianteActual.estado === 'abordo' ? (
+                    <>
+                      <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#0D1B3E', flex: 1 }]} onPress={() => marcarEstado(estudianteActual.id, 'entregado')}>
+                        <Ionicons name="hand-left-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>Entregar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#DC2626', width: 110 }]} onPress={() => marcarEstado(estudianteActual.id, 'ausente')}>
+                        <Ionicons name="close-circle-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>Ausente</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#16A34A', flex: 1 }]} onPress={() => marcarEstado(estudianteActual.id, 'abordo')}>
+                        <Ionicons name="checkmark-circle-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>A Bordo</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#DC2626', width: 110 }]} onPress={() => marcarEstado(estudianteActual.id, 'ausente')}>
+                        <Ionicons name="close-circle-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>Ausente</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
                 </View>
               </>
             )}
