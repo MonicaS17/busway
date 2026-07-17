@@ -126,6 +126,26 @@ export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRuta
             return;
           }
 
+          // Verificar si el padre tiene pago efectivo
+          let paid = false;
+          try {
+            const resAcuerdo = await api.get('/api/acuerdos/mis-acuerdos', {
+              headers: { Authorization: `Bearer ${idToken}` }
+            });
+            const ac = resAcuerdo.data?.acuerdo;
+            if (ac && ac.estado === 'activo' && ac.stripe_subscription_id) {
+              paid = true;
+            }
+          } catch (err) {
+            console.log('Error verifying parent agreement payment:', err.message);
+          }
+
+          if (!paid) {
+            setError('Acceso restringido. Debes registrar y completar tu pago para activar el seguimiento de la ruta.');
+            setLoading(false);
+            return;
+          }
+
           // Obtener viaje activo con nueva estructura { viaje, fase }
           try {
             const resViaje = await api.get(`/api/viajes/activo/padre?estudiante_id=${activeHijo._id}&ruta_id=${activeRutaId}`, {

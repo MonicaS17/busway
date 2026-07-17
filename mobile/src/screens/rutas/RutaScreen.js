@@ -794,14 +794,27 @@ function RutaConductor({ navigation, usuario }) {
       });
 
       const estudiantesObtenidos = resEst.data?.estudiantes || [];
-      const mappedEstudiantes = estudiantesObtenidos.map((e, idx) => ({
-        id: e._id,
-        nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
-        zona: e.zona || 'Arraiján',
-        escuela: e.escuela || (resRuta.data?.ruta?.escuela_id ? (typeof resRuta.data.ruta.escuela_id === 'object' ? resRuta.data.ruta.escuela_id.nombre : resRuta.data.ruta.escuela) : (resRuta.data?.ruta?.escuela || 'Colegio')),
-        ruta_id: e.ruta_id && typeof e.ruta_id === 'object' ? e.ruta_id._id : (e.ruta_id || null),
-        inputPos: (idx + 1).toString(),
-      }));
+      
+      const conteoPorRuta = {};
+      const mappedEstudiantes = estudiantesObtenidos.map((e) => {
+        const rId = e.ruta_id && typeof e.ruta_id === 'object' ? e.ruta_id._id : (e.ruta_id || null);
+        const rIdStr = rId ? rId.toString() : 'sin_ruta';
+        
+        if (conteoPorRuta[rIdStr] === undefined) {
+          conteoPorRuta[rIdStr] = 0;
+        }
+        conteoPorRuta[rIdStr] += 1;
+        const localIndex = conteoPorRuta[rIdStr];
+
+        return {
+          id: e._id,
+          nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
+          zona: e.zona || 'Arraiján',
+          escuela: e.escuela || (resRuta.data?.ruta?.escuela_id ? (typeof resRuta.data.ruta.escuela_id === 'object' ? resRuta.data.ruta.escuela_id.nombre : resRuta.data.ruta.escuela) : (resRuta.data?.ruta?.escuela || 'Colegio')),
+          ruta_id: rId,
+          inputPos: localIndex.toString(),
+        };
+      });
 
       setEstudiantes(mappedEstudiantes);
 
@@ -1094,26 +1107,59 @@ function RutaConductor({ navigation, usuario }) {
   };
 
   const moverEstudiante = (index, direccion) => {
-    const nuevas = [...estudiantes];
+    const estudiantesDeRuta = estudiantes.filter(e => e.ruta_id === rutaSeleccionada.id);
     const destino = direccion === 'ARRIBA' ? index - 1 : index + 1;
-    if (destino < 0 || destino >= estudiantes.length) return;
-    const temp = nuevas[index];
-    nuevas[index] = nuevas[destino];
-    nuevas[destino] = temp;
-    nuevas.forEach((e, i) => { e.inputPos = (i + 1).toString(); });
+    if (destino < 0 || destino >= estudiantesDeRuta.length) return;
+
+    const est1 = estudiantesDeRuta[index];
+    const est2 = estudiantesDeRuta[destino];
+
+    const globalIdx1 = estudiantes.findIndex(e => e.id === est1.id);
+    const globalIdx2 = estudiantes.findIndex(e => e.id === est2.id);
+
+    if (globalIdx1 === -1 || globalIdx2 === -1) return;
+
+    const nuevas = [...estudiantes];
+    const temp = nuevas[globalIdx1];
+    nuevas[globalIdx1] = nuevas[globalIdx2];
+    nuevas[globalIdx2] = temp;
+
+    const filteredAndReindexed = nuevas.filter(e => e.ruta_id === rutaSeleccionada.id);
+    filteredAndReindexed.forEach((e, i) => {
+      e.inputPos = (i + 1).toString();
+    });
+
     setEstudiantes(nuevas);
   };
 
   const cambiarPosicion = (index, texto) => {
+    const estudiantesDeRuta = estudiantes.filter(e => e.ruta_id === rutaSeleccionada.id);
+    const est = estudiantesDeRuta[index];
+    const globalIdx = estudiantes.findIndex(e => e.id === est.id);
+    if (globalIdx === -1) return;
+
     const nuevas = [...estudiantes];
-    nuevas[index].inputPos = texto;
+    nuevas[globalIdx].inputPos = texto;
     setEstudiantes(nuevas);
+
     const pos = parseInt(texto);
-    if (isNaN(pos) || pos < 1 || pos > estudiantes.length) return;
-    const [alumno] = nuevas.splice(index, 1);
-    nuevas.splice(pos - 1, 0, alumno);
-    nuevas.forEach((e, i) => { e.inputPos = (i + 1).toString(); });
-    setEstudiantes(nuevas);
+    if (isNaN(pos) || pos < 1 || pos > estudiantesDeRuta.length) return;
+
+    const deRuta = nuevas.filter(e => e.ruta_id === rutaSeleccionada.id);
+    const [alumno] = deRuta.splice(index, 1);
+    deRuta.splice(pos - 1, 0, alumno);
+
+    let deRutaIdx = 0;
+    const finalNuevas = nuevas.map(e => {
+      if (e.ruta_id === rutaSeleccionada.id) {
+        const item = deRuta[deRutaIdx++];
+        item.inputPos = deRutaIdx.toString();
+        return item;
+      }
+      return e;
+    });
+
+    setEstudiantes(finalNuevas);
   };
 
   if (loading) {
@@ -1593,7 +1639,31 @@ function RutaConductor({ navigation, usuario }) {
             <Text style={styles.tablaHeaderNombre}>Estudiante</Text>
             <TouchableOpacity
               style={[styles.btnEditar, editando && styles.btnEditarActivo]}
-              onPress={() => setEditando(!editando)}
+              onPress={async () => {
+                if (editando) {
+                  try {
+                    const token = await auth.currentUser.getIdToken();
+                    const deRuta = estudiantes.filter(e => e.ruta_id === rutaSeleccionada.id);
+                    
+                    const payloadEstudiantes = deRuta.map((e, idx) => ({
+                      estudiante_id: e.id,
+                      orden: idx + 1
+                    }));
+
+                    await api.patch(`/api/conductor/ruta/${rutaSeleccionada.id}`, {
+                      estudiantes: payloadEstudiantes
+                    }, {
+                      headers: { Authorization: `Bearer ${token}` }
+                    });
+                    
+                    Alert.alert('Éxito', 'El orden de recogida ha sido guardado correctamente.');
+                  } catch (err) {
+                    console.log('Error al guardar el orden de los estudiantes:', err.message);
+                    Alert.alert('Error', 'No se pudo guardar el orden de los estudiantes.');
+                  }
+                }
+                setEditando(!editando);
+              }}
             >
               <Ionicons name={editando ? 'checkmark-circle' : 'create-outline'} size={14} color={editando ? '#fff' : '#0D1B3E'} />
               <Text style={[styles.btnEditarText, editando && { color: '#fff' }]}>

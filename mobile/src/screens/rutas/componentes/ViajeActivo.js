@@ -96,7 +96,7 @@ function ViajeActivoPadre({
     esperando_ida_inactivo: {
       icono: 'time-outline',
       titulo: 'Viaje no iniciado',
-      mensaje: 'Esperando recogida: el conductor aún no ha iniciado la ruta.',
+      mensaje: 'El conductor aún no ha iniciado la ruta.',
       colorFondo: '#F5F8FC',
       colorTexto: '#0D1B3E',
       colorIcono: '#888',
@@ -134,7 +134,7 @@ function ViajeActivoPadre({
     esperando_vuelta_inactivo: {
       icono: 'time-outline',
       titulo: 'Viaje no iniciado',
-      mensaje: 'Esperando regreso: el viaje de regreso a casa no ha iniciado.',
+      mensaje: 'El conductor aún no ha iniciado la ruta.',
       colorFondo: '#F5F8FC',
       colorTexto: '#0D1B3E',
       colorIcono: '#888',
@@ -180,7 +180,7 @@ function ViajeActivoPadre({
     }
   }[estadoVisual] || {
     icono: 'time-outline',
-    titulo: 'Esperando recogida',
+    titulo: 'Viaje no iniciado',
     mensaje: 'El conductor aún no ha iniciado la ruta.',
     colorFondo: '#F5F8FC',
     colorTexto: '#0D1B3E',

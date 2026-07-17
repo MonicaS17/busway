@@ -397,7 +397,7 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para modificar esta ruta' });
     }
 
-    const { escuela_id, nombre_ruta, escuela, zona, horario_salida, horario_llegada, frecuencia, estado, escuela_lat, escuela_lng, hora_salida_vuelta } = req.body;
+    const { escuela_id, nombre_ruta, escuela, zona, horario_salida, horario_llegada, frecuencia, estado, escuela_lat, escuela_lng, hora_salida_vuelta, estudiantes } = req.body;
 
     const checkSalida = horario_salida !== undefined ? horario_salida : ruta.horario_salida;
     const checkLlegada = horario_llegada !== undefined ? horario_llegada : ruta.horario_llegada;
@@ -520,6 +520,9 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
     if (escuela_lat !== undefined && escuela_id === undefined) ruta.escuela_lat = escuela_lat;
     if (escuela_lng !== undefined && escuela_id === undefined) ruta.escuela_lng = escuela_lng;
     if (hora_salida_vuelta !== undefined) ruta.hora_salida_vuelta = hora_salida_vuelta;
+    if (estudiantes !== undefined) {
+      ruta.estudiantes = estudiantes;
+    }
 
     await ruta.save();
 
