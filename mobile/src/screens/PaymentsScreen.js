@@ -50,7 +50,7 @@ export default function PaymentsScreen({ navigation, route }) {
 
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => navigation.navigate('Dashboard', { usuario: perfilUsuario || usuario })} style={styles.backBtn}>
             <Ionicons name="arrow-back-outline" size={22} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
@@ -63,7 +63,7 @@ export default function PaymentsScreen({ navigation, route }) {
 
       <View style={styles.card}>
         {esConductor 
-          ? <VistaConductor usuario={perfilUsuario} onRefreshUsuario={cargarPerfil} /> 
+          ? <VistaConductor navigation={navigation} usuario={perfilUsuario} onRefreshUsuario={cargarPerfil} /> 
           : <VistaPadre usuario={perfilUsuario} />}
       </View>
     </SafeAreaView>
@@ -94,6 +94,7 @@ async function abrirStripeCheckout(url, onResult) {
 
 // ─── VISTA PADRE ──────────────────────────────────────────────────────────────
 function VistaPadre({ usuario }) {
+  const [acuerdos, setAcuerdos] = useState([]);
   const [acuerdo, setAcuerdo] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [cargandoAcuerdo, setCargandoAcuerdo] = useState(true);
@@ -152,7 +153,16 @@ function VistaPadre({ usuario }) {
       const { data } = await api.get('/api/acuerdos/mis-acuerdos', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setAcuerdo(data?.acuerdo || null);
+      const list = data?.acuerdos || [];
+      setAcuerdos(list);
+      if (list.length > 0) {
+        setAcuerdo(prev => {
+          const found = list.find(a => a._id === prev?._id);
+          return found || list[0];
+        });
+      } else {
+        setAcuerdo(null);
+      }
     } catch (err) {
       console.error('Error cargando acuerdo:', err?.response?.data || err?.message);
     } finally {
@@ -242,6 +252,7 @@ function VistaPadre({ usuario }) {
         {
           success_url: successUrl,
           cancel_url: cancelUrl,
+          acuerdoId: acuerdo?._id
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -296,6 +307,32 @@ function VistaPadre({ usuario }) {
         <RefreshControl refreshing={refrescando} onRefresh={alRefrescar} colors={['#0D1B3E']} />
       }
     >
+
+      {/* Selector de contratos (si tiene más de uno) */}
+      {acuerdos.length > 1 && (
+        <View style={{ marginBottom: 15 }}>
+          <Text style={styles.sectionLabel}>Selecciona el contrato a gestionar</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectorScroll}>
+            {acuerdos.map((ac) => {
+              const seleccionado = ac._id === acuerdo?._id;
+              const ninoNom = ac.solicitud_id?.hijos_ids?.map(h => h.nombre).join(', ') || 'Hijo';
+              const condNom = ac.conductor_id ? `${ac.conductor_id.nombre} ${ac.conductor_id.apellido?.charAt(0) || ''}.` : 'Conductor';
+              return (
+                <TouchableOpacity
+                  key={ac._id}
+                  style={[styles.contratoChip, seleccionado && styles.contratoChipSeleccionado]}
+                  onPress={() => setAcuerdo(ac)}
+                >
+                  <Ionicons name="card-outline" size={14} color={seleccionado ? '#fff' : '#0D1B3E'} />
+                  <Text style={[styles.contratoChipText, seleccionado && styles.contratoChipTextSeleccionado]}>
+                    {ninoNom} ({condNom})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Sin contrato activo */}
       {!cargandoAcuerdo && !acuerdo && (
@@ -564,7 +601,7 @@ function FilaRecibo({ label, valor, destacado }) {
 }
 
 // ─── VISTA CONDUCTOR ──────────────────────────────────────────────────────────
-function VistaConductor({ usuario, onRefreshUsuario }) {
+function VistaConductor({ navigation, usuario, onRefreshUsuario }) {
   const [pagos, setPagos] = useState([]);
   const [acuerdos, setAcuerdos] = useState([]);
   const [contratosActivos, setContratosActivos] = useState(0);
@@ -688,7 +725,8 @@ function VistaConductor({ usuario, onRefreshUsuario }) {
     return (
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
         <ScrollView
           contentContainerStyle={styles.body}
@@ -751,12 +789,36 @@ function VistaConductor({ usuario, onRefreshUsuario }) {
           <Text style={[styles.inputLabel, { marginTop: 14 }]}>Número de Cuenta o Tarjeta</Text>
           <TextInput
             style={styles.formInput}
-            placeholder="Ej: 04729831948"
+            placeholder="Ej: 4242 4242 4242 4242 o 04729831948"
             placeholderTextColor="#aaa"
             value={bancoCuenta}
-            onChangeText={setBancoCuenta}
+            onChangeText={(text) => {
+              const clean = text.replace(/\D/g, '');
+              let formatted = clean;
+              if (clean.length === 15 || clean.length === 16) {
+                formatted = clean.match(/.{1,4}/g)?.join(' ') || clean;
+              }
+              setBancoCuenta(formatted);
+            }}
             keyboardType="numeric"
           />
+
+          {bancoCuenta.trim().length > 0 && (() => {
+            const cleanDigits = bancoCuenta.replace(/\D/g, '');
+            const esTarjeta = cleanDigits.length === 15 || cleanDigits.length === 16;
+            return (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 4, paddingLeft: 4 }}>
+                <Ionicons 
+                  name={esTarjeta ? "card-outline" : "business-outline"} 
+                  size={14} 
+                  color={esTarjeta ? "#16A34A" : "#0A84FF"} 
+                />
+                <Text style={{ fontSize: 12, color: esTarjeta ? "#16A34A" : "#0A84FF", fontWeight: '600' }}>
+                  {esTarjeta ? "Detectado: Tarjeta de Crédito/Débito" : "Detectado: Cuenta Bancaria"}
+                </Text>
+              </View>
+            );
+          })()}
 
           <Text style={[styles.inputLabel, { marginTop: 14 }]}>Nombre del Titular</Text>
           <TextInput
@@ -774,11 +836,13 @@ function VistaConductor({ usuario, onRefreshUsuario }) {
               setGuardandoBanco(true);
               try {
                 const token = await obtenerToken();
+                const cleanCuenta = bancoCuenta.replace(/\s/g, '');
                 await api.patch('/api/auth/perfil/actualizar', {
                   banco_info: {
                     banco_nombre: bancoNombre,
                     banco_tipo: bancoTipo,
-                    banco_cuenta: bancoCuenta,
+                    banco_cuenta: cleanCuenta,
+                    num_cuenta: cleanCuenta,
                     banco_titular: bancoTitular
                   }
                 }, {
@@ -786,13 +850,11 @@ function VistaConductor({ usuario, onRefreshUsuario }) {
                 });
                 Alert.alert(
                   'Registro Exitoso',
-                  'Tu información de cobro ha sido guardada correctamente. Tu ruta ha sido publicada en el Marketplace.',
+                  'Tu información de cobro ha sido guardada correctamente. Tu ruta ha sido publicada.',
                   [
                     {
-                      text: 'Ver en Marketplace',
-                      onPress: () => {
-                        navigation.navigate('Marketplace');
-                      }
+                      text: 'Entendido',
+                      onPress: () => {}
                     }
                   ]
                 );
@@ -1220,4 +1282,9 @@ const styles = StyleSheet.create({
     color: '#0D1B3E',
     fontWeight: '500',
   },
+  selectorScroll: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
+  contratoChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, backgroundColor: '#F0F4F8', borderWidth: 1, borderColor: '#E3ECF7' },
+  contratoChipSeleccionado: { backgroundColor: '#0D1B3E', borderColor: '#0D1B3E' },
+  contratoChipText: { fontSize: 12, fontWeight: '600', color: '#0D1B3E' },
+  contratoChipTextSeleccionado: { color: '#fff' },
 });

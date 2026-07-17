@@ -107,7 +107,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
             id: e._id,
             _id: e._id,
             nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
-            zona: e.zona || 'Arraiján',
+            zona: e.zona || e.direccion || 'Sin ubicación',
             qr: e.qr_code,
             lat: e.lat,
             lng: e.lng,
@@ -130,7 +130,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         setIdViaje(activeTrip._id);
       } else {
         setIdViaje(null);
-        if (rutaData.faseViaje === 'entre_viajes') {
+        if (rutaData.faseViaje === 'entre_viajes' || rutaData.faseViaje === 'jornada_completa') {
           setTipoViaje('vuelta');
         } else {
           setTipoViaje('ida');
@@ -138,22 +138,27 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
       }
     } else {
       const activeTrip = rutaData.activeTripInitial;
-      const mappedEst = rutaData.estudiantes.map(e => {
+      const mappedEst = rutaData.estudiantes.map((e, idx) => {
         let estado = 'pendiente';
         if (activeTrip && activeTrip.asistencias) {
           const miAsistencia = activeTrip.asistencias.filter(a => a.hijo_id === e._id);
           if (miAsistencia.length > 0) {
             const ultima = miAsistencia[miAsistencia.length - 1];
-            if (ultima.tipo === 'subida') estado = 'abordo';
-            else if (ultima.tipo === 'bajada') estado = 'entregado';
+            if (ultima.tipo === 'subida' || ultima.tipo === 'abordado') estado = 'abordo';
+            else if (ultima.tipo === 'bajada' || ultima.tipo === 'entregado') estado = 'entregado';
             else if (ultima.tipo === 'ausente') estado = 'ausente';
           }
         }
         return {
           id: e._id,
+          _id: e._id,
           nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
-          zona: e.zona || 'Arraiján',
+          zona: e.zona || e.direccion || 'Sin ubicación',
           qr: e.qr_code,
+          lat: e.lat,
+          lng: e.lng,
+          direccion: e.direccion,
+          orden: e.orden || (idx + 1),
           estado
         };
       });
@@ -217,6 +222,12 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         setFaseViaje('en_curso');
         setTipoViaje(data.tipo_viaje || 'ida');
         setIdViaje(data.id_viaje);
+        Alert.alert(
+          'Viaje Iniciado 🚌',
+          data.tipo_viaje === 'vuelta'
+            ? 'El conductor ha iniciado el viaje de regreso a casa.'
+            : 'El conductor ha iniciado el viaje rumbo a la escuela.'
+        );
       });
       socketClient.on('padre:actualizar_mapa', (coor) => {
         setCoordenadasBus({
@@ -227,16 +238,32 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         });
       });
       socketClient.on('asistencia:actualizada', (data) => {
-        setHijos(prev => prev.map(h => {
-          if (h.id === data.hijo_id) {
-            let estado = h.estado;
-            if (data.tipo === 'subida' || data.tipo === 'abordado') estado = 'abordo';
-            else if (data.tipo === 'bajada' || data.tipo === 'entregado') estado = 'entregado';
-            else if (data.tipo === 'ausente') estado = 'ausente';
-            return { ...h, estado };
+        setHijos(prev => {
+          const matchingHijo = prev.find(h => String(h.id) === String(data.hijo_id));
+          if (matchingHijo) {
+            let msg = '';
+            if (data.tipo === 'subida' || data.tipo === 'abordado') {
+              msg = `${matchingHijo.nombre} ha abordado el autobús.`;
+            } else if (data.tipo === 'bajada' || data.tipo === 'entregado') {
+              msg = `${matchingHijo.nombre} ha llegado a su destino.`;
+            } else if (data.tipo === 'ausente') {
+              msg = `${matchingHijo.nombre} ha sido marcado como ausente.`;
+            }
+            if (msg) {
+              Alert.alert('Asistencia Escolar 🔔', msg);
+            }
           }
-          return h;
-        }));
+          return prev.map(h => {
+            if (h.id === data.hijo_id) {
+              let estado = h.estado;
+              if (data.tipo === 'subida' || data.tipo === 'abordado') estado = 'abordo';
+              else if (data.tipo === 'bajada' || data.tipo === 'entregado') estado = 'entregado';
+              else if (data.tipo === 'ausente') estado = 'ausente';
+              return { ...h, estado };
+            }
+            return h;
+          });
+        });
       });
       socketClient.on('ruta:finalizada', () => {
         setRutaActiva(false);
@@ -247,9 +274,11 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         setRutaActiva(false);
         setFaseViaje('entre_viajes'); // [E-09]
       });
-      socketClient.on('ruta:transicion_vuelta', () => {
-        setRutaActiva(false);
-        setFaseViaje('entre_viajes');
+      socketClient.on('ruta:transicion_vuelta', (data) => {
+        setRutaActiva(true);
+        setFaseViaje('en_curso');
+        setTipoViaje('vuelta');
+        setIdViaje(data?.id_viaje || null);
         setHijos(prev => prev.map(h => ({ ...h, estado: 'pendiente' })));
       });
     } else {
@@ -257,13 +286,14 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         // Actualizar idViaje, tipoViaje y currentStep tras confirmación del backend (regla global)
         setIdViaje(data.id_viaje);
         setTipoViaje(data.tipo_viaje);
+        setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
         setCurrentStep('ACTIVE_TRIP');
       });
       socketClient.on('asistencia:actualizada', (data) => {
         setEstudiantes(prev => prev.map(est => {
           if (est.id === data.hijo_id) {
             let estado = est.estado;
-            if (data.tipo === 'subida' || data.tipo === 'abordado') estado = 'abordo';
+            if (data.tipo === 'subida' || data.tipo === 'abordado' || data.tipo === 'abordo') estado = 'abordo';
             else if (data.tipo === 'bajada' || data.tipo === 'entregado') estado = 'entregado';
             else if (data.tipo === 'ausente') estado = 'ausente';
             return { ...est, estado };
@@ -288,7 +318,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
         setIdViaje(data.id_viaje);
         setTipoViaje('vuelta');
         setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
-        setCurrentStep('SCHOOL_CHECKIN');
+        setCurrentStep('ACTIVE_TRIP');
       });
 
       socketClient.on('error:servidor', (err) => {
@@ -311,11 +341,39 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
+
+        // Obtener posición inicial inmediatamente
+        try {
+          const inicial = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High
+          });
+          if (inicial && inicial.coords) {
+            const { latitude, longitude, speed } = inicial.coords;
+            const coords = {
+              latitude,
+              longitude,
+              latitudeDelta: 0.006,
+              longitudeDelta: 0.006,
+            };
+            setPosicionBus(coords);
+            if (socketRef.current?.connected && rutaData.rutaInfo) {
+              socketRef.current.emit('conductor:coordenadas', {
+                id_ruta: rutaData.rutaInfo._id,
+                lat: latitude,
+                lng: longitude,
+                velocidad: speed ? Math.round(speed * 3.6) : 0
+              });
+            }
+          }
+        } catch (posErr) {
+          console.warn('No se pudo obtener la ubicación inicial inmediata:', posErr);
+        }
+
         GPSsubscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
-            timeInterval: 5000,
-            distanceInterval: 5,
+            timeInterval: 3000,
+            distanceInterval: 2,
           },
           (location) => {
             const { latitude, longitude, speed } = location.coords;
@@ -444,7 +502,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
       }
     } catch {}
 
-    const est = estudiantes.find(e => e.id === childId || e.qr === data);
+    const est = estudiantes.find(e => String(e.id) === String(childId) || String(e._id) === String(childId));
     if (est) {
       if (est.estado === 'abordo') {
         Alert.alert('Ya registrado', `${est.nombre} ya está a bordo.`);
@@ -470,35 +528,41 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
       }
     } catch {}
 
-    const currentStudent = estudiantes.find(e => e.estado === 'abordo');
-    if (currentStudent && (currentStudent.id === childId || currentStudent.qr === data)) {
-      marcarEstado(currentStudent.id, 'entregado');
-      Alert.alert('Entrega confirmada', `Estudiante ${currentStudent.nombre} entregado exitosamente al padre.`);
+    const scannedStudent = estudiantes.find(e => String(e.id) === String(childId) || String(e._id) === String(childId));
+    if (scannedStudent) {
+      if (scannedStudent.estado === 'entregado') {
+        Alert.alert('Ya entregado', `${scannedStudent.nombre} ya ha sido entregado.`);
+      } else {
+        marcarEstado(scannedStudent.id, 'entregado');
+        Alert.alert('Entrega confirmada', `Estudiante ${scannedStudent.nombre} entregado exitosamente al padre.`);
+      }
     } else {
-      Alert.alert('QR no válido', 'El código QR no corresponde al estudiante actual en esta parada.');
+      Alert.alert('QR no válido', 'El código QR no corresponde a ningún estudiante de esta ruta.');
     }
     setTimeout(() => setUltimoEscaneado(null), 3000);
   };
 
   const comenzarAsistencia = () => {
-    // Para ambos viajes (ida y vuelta), pasamos lista antes de iniciar el viaje
-    setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
-    setCurrentStep('SCHOOL_CHECKIN');
+    if (socketRef.current && rutaData.rutaInfo) {
+      setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
+      if (tipoViaje === 'vuelta') {
+        socketRef.current.emit('ruta:crear_vuelta', {
+          id_ruta: rutaData.rutaInfo._id,
+          id_conductor: usuario._id
+        });
+      } else {
+        socketRef.current.emit('ruta:iniciar', {
+          id_ruta: rutaData.rutaInfo._id,
+          id_conductor: usuario._id,
+          tipo_viaje: 'ida'
+        });
+      }
+    }
   };
 
   const iniciarRuta = () => {
     if (socketRef.current && rutaData.rutaInfo) {
       const tipoEfectivo = tipoViaje;
-
-      const algunEstudianteAsistiendo = estudiantes.some(e => e.estado === 'abordo');
-      if (!algunEstudianteAsistiendo) {
-        Alert.alert(
-          'No se puede iniciar la ruta',
-          'No puedes iniciar la ruta si no hay ningún estudiante a bordo (todos están ausentes o sin registrar asistencia).'
-        );
-        return;
-      }
-
       socketRef.current.emit('ruta:iniciar', {
         id_ruta: rutaData.rutaInfo._id,
         id_conductor: usuario._id,
@@ -539,11 +603,15 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
     );
   };
 
-  // iniciarRutaVuelta sin emit de socket (el viaje de vuelta se crea en ruta:iniciar de forma activa)
   const iniciarRutaVuelta = () => {
     setTipoViaje('vuelta');
     setEstudiantes(prev => prev.map(e => ({ ...e, estado: 'pendiente' })));
-    setCurrentStep('SCHOOL_CHECKIN');
+    if (socketRef.current && rutaData.rutaInfo) {
+      socketRef.current.emit('ruta:crear_vuelta', {
+        id_ruta: rutaData.rutaInfo._id,
+        id_conductor: usuario._id
+      });
+    }
   };
 
   const reiniciarJornada = () => {

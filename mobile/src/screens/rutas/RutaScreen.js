@@ -236,7 +236,9 @@ function RutaPadre({ navigation, usuario, route }) {
           escuela: destinoEscuela,
           zona: rutaInfo.zona || 'Arraiján',
           frecuencia: formatFrecuencia(rutaInfo.frecuencia),
-          horario: rutaInfo.horario || '6:30 AM — 7:15 AM',
+          horario: (rutaInfo.horario_salida && rutaInfo.horario_llegada)
+            ? `${rutaInfo.horario_salida} — ${rutaInfo.horario_llegada}${rutaInfo.hora_salida_vuelta ? ` / Regreso: ${rutaInfo.hora_salida_vuelta}` : ''}`
+            : (rutaInfo.horario || '6:30 AM — 7:15 AM'),
           tarifa: activeAgreement ? activeAgreement.tarifa_mensual : (condInfo?.datos_conductor?.tarifa || 80),
           mesActual: activeAgreement ? activeAgreement.mes_actual : 1,
           totalMeses: activeAgreement ? activeAgreement.total_meses : 10,
@@ -297,32 +299,25 @@ function RutaPadre({ navigation, usuario, route }) {
   }
 
   const progreso = (ruta.mesActual / ruta.totalMeses) * 100;
-  const mostrarSelectorHijos = hijos.length > 1 && uniqueRutas.length > 1;
-  const hijosEnEstaRuta = uniqueRutas.length > 1
-    ? ruta.hijos.filter(h => h.ruta_id === ruta.rutaIdActiva)
-    : ruta.hijos;
-  const gruposPorRuta = uniqueRutas.map(rutaId => {
-    const hijosDeRuta = hijos.filter(h => (h.ruta_id?._id?.toString() || h.ruta_id?.toString()) === rutaId);
-    return { rutaId, representante: hijosDeRuta[0], extra: hijosDeRuta.length - 1 };
-  });
+  const mostrarSelectorHijos = hijos.length > 1;
+  const hijosEnEstaRuta = ruta.hijos.filter(h => h.ruta_id === ruta.rutaIdActiva);
 
   return (
     <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
       {/* Selector de hijos (chips) */}
       {mostrarSelectorHijos && (
         <>
-          <Text style={styles.sectionLabel}>Rutas de tus hijos asignados</Text>
+          <Text style={styles.sectionLabel}>Mis Hijos</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.hijosChipsRow}
           >
-            {gruposPorRuta.map((grupo) => {
-              const hijo = grupo.representante;
+            {hijos.map((hijo) => {
               const seleccionado = hijoSeleccionado?._id === hijo._id;
               return (
                 <TouchableOpacity
-                  key={grupo.rutaId}
+                  key={hijo._id}
                   style={[styles.hijoChip, seleccionado && styles.hijoChipSeleccionado]}
                   onPress={() => setHijoSeleccionado(hijo)}
                 >
@@ -330,11 +325,6 @@ function RutaPadre({ navigation, usuario, route }) {
                     <Text style={[styles.hijoAvatarText, seleccionado && styles.hijoChipAvatarTextSeleccionado]}>
                       {hijo.nombre.charAt(0)}
                     </Text>
-                    {grupo.extra > 0 && (
-                      <View style={styles.hijoChipExtraBadge}>
-                        <Text style={styles.hijoChipExtraBadgeText}>+{grupo.extra}</Text>
-                      </View>
-                    )}
                   </View>
                   <Text style={[styles.hijoChipNombre, seleccionado && styles.hijoChipNombreSeleccionado]}>
                     {hijo.nombre}
@@ -691,32 +681,63 @@ function RutaConductor({ navigation, usuario }) {
     setMostrarListaEscuelas(false);
     setBusquedaEscuela('');
     const escObj = listaEscuelas.find(e => e._id === escId);
-    if (escObj && escObj.distrito) {
-      setFormZona(escObj.distrito);
+    if (escObj) {
+      if (escObj.distrito) {
+        setFormZona(escObj.distrito);
+      }
+      if (escObj.lat) {
+        setFormEscuelaLat(escObj.lat);
+      }
+      if (escObj.lng) {
+        setFormEscuelaLng(escObj.lng);
+      }
     }
   };
 
   const obtenerProvinciaPorPlaca = (placa) => {
     if (!placa) return null;
-    const match = placa.match(/^(\d{1,2})BC/i);
-    if (!match) return null;
-    const num = parseInt(match[1], 10);
-    switch (num) {
-      case 1: return 'Bocas del Toro';
-      case 2: return 'Coclé';
-      case 3: return 'Colón';
-      case 4: return 'Chiriquí';
-      case 5: return 'Darién';
-      case 6: return 'Herrera';
-      case 7: return 'Los Santos';
-      case 8: return 'Panamá';
-      case 9: return 'Veraguas';
-      case 10: return 'Guna Yala';
-      case 11: return 'Ngäbe-Buglé';
-      case 12: return 'Emberá-Wounaan';
-      case 13: return 'Panamá Oeste';
-      default: return null;
+    const cleanPlaca = placa.trim().toUpperCase();
+    const match = cleanPlaca.match(/^\d+/);
+    if (match) {
+      const num = parseInt(match[0], 10);
+      switch (num) {
+        case 1: return 'Bocas del Toro';
+        case 2: return 'Coclé';
+        case 3: return 'Colón';
+        case 4: return 'Chiriquí';
+        case 5: return 'Darién';
+        case 6: return 'Herrera';
+        case 7: return 'Los Santos';
+        case 8: return 'Panamá';
+        case 9: return 'Veraguas';
+        case 10: return 'Guna Yala';
+        case 11: return 'Emberá-Wounaan';
+        case 12: return 'Ngäbe-Buglé';
+        case 13: return 'Panamá Oeste';
+        default: break;
+      }
     }
+    const innerMatch = cleanPlaca.match(/(?:^|[A-Z-])(\d+)(?:[A-Z-]|$)/);
+    if (innerMatch) {
+      const num = parseInt(innerMatch[1], 10);
+      switch (num) {
+        case 1: return 'Bocas del Toro';
+        case 2: return 'Coclé';
+        case 3: return 'Colón';
+        case 4: return 'Chiriquí';
+        case 5: return 'Darién';
+        case 6: return 'Herrera';
+        case 7: return 'Los Santos';
+        case 8: return 'Panamá';
+        case 9: return 'Veraguas';
+        case 10: return 'Guna Yala';
+        case 11: return 'Emberá-Wounaan';
+        case 12: return 'Ngäbe-Buglé';
+        case 13: return 'Panamá Oeste';
+        default: break;
+      }
+    }
+    return null;
   };
 
   const provinciaConductor = conductorVehiculo ? obtenerProvinciaPorPlaca(conductorVehiculo.placa) : null;
@@ -763,14 +784,27 @@ function RutaConductor({ navigation, usuario }) {
       });
 
       const estudiantesObtenidos = resEst.data?.estudiantes || [];
-      const mappedEstudiantes = estudiantesObtenidos.map((e, idx) => ({
-        id: e._id,
-        nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
-        zona: e.zona || 'Arraiján',
-        escuela: e.escuela || (resRuta.data?.ruta?.escuela_id ? (typeof resRuta.data.ruta.escuela_id === 'object' ? resRuta.data.ruta.escuela_id.nombre : resRuta.data.ruta.escuela) : (resRuta.data?.ruta?.escuela || 'Colegio')),
-        ruta_id: e.ruta_id && typeof e.ruta_id === 'object' ? e.ruta_id._id : (e.ruta_id || null),
-        inputPos: (idx + 1).toString(),
-      }));
+      
+      const conteoPorRuta = {};
+      const mappedEstudiantes = estudiantesObtenidos.map((e) => {
+        const rId = e.ruta_id && typeof e.ruta_id === 'object' ? e.ruta_id._id : (e.ruta_id || null);
+        const rIdStr = rId ? rId.toString() : 'sin_ruta';
+        
+        if (conteoPorRuta[rIdStr] === undefined) {
+          conteoPorRuta[rIdStr] = 0;
+        }
+        conteoPorRuta[rIdStr] += 1;
+        const localIndex = conteoPorRuta[rIdStr];
+
+        return {
+          id: e._id,
+          nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
+          zona: e.zona || 'Arraiján',
+          escuela: e.escuela || (resRuta.data?.ruta?.escuela_id ? (typeof resRuta.data.ruta.escuela_id === 'object' ? resRuta.data.ruta.escuela_id.nombre : resRuta.data.ruta.escuela) : (resRuta.data?.ruta?.escuela || 'Colegio')),
+          ruta_id: rId,
+          inputPos: localIndex.toString(),
+        };
+      });
 
       setEstudiantes(mappedEstudiantes);
 
@@ -943,7 +977,7 @@ function RutaConductor({ navigation, usuario }) {
               {
                 text: 'Configurar Cobro',
                 onPress: () => {
-                  navigation.navigate('Payments');
+                  navigation.navigate('Pagos', { usuario });
                 }
               }
             ]
@@ -953,7 +987,7 @@ function RutaConductor({ navigation, usuario }) {
         }
       }
     } catch (err) {
-      console.error('Error al guardar ruta:', err);
+      console.log('Error al guardar ruta:', err.response?.data?.error || err.message);
       setErrorGuardar(err.response?.data?.error || 'Error al guardar la ruta. Inténtalo de nuevo.');
     } finally {
       setGuardando(false);
@@ -1063,26 +1097,59 @@ function RutaConductor({ navigation, usuario }) {
   };
 
   const moverEstudiante = (index, direccion) => {
-    const nuevas = [...estudiantes];
+    const estudiantesDeRuta = estudiantes.filter(e => e.ruta_id === rutaSeleccionada.id);
     const destino = direccion === 'ARRIBA' ? index - 1 : index + 1;
-    if (destino < 0 || destino >= estudiantes.length) return;
-    const temp = nuevas[index];
-    nuevas[index] = nuevas[destino];
-    nuevas[destino] = temp;
-    nuevas.forEach((e, i) => { e.inputPos = (i + 1).toString(); });
+    if (destino < 0 || destino >= estudiantesDeRuta.length) return;
+
+    const est1 = estudiantesDeRuta[index];
+    const est2 = estudiantesDeRuta[destino];
+
+    const globalIdx1 = estudiantes.findIndex(e => e.id === est1.id);
+    const globalIdx2 = estudiantes.findIndex(e => e.id === est2.id);
+
+    if (globalIdx1 === -1 || globalIdx2 === -1) return;
+
+    const nuevas = [...estudiantes];
+    const temp = nuevas[globalIdx1];
+    nuevas[globalIdx1] = nuevas[globalIdx2];
+    nuevas[globalIdx2] = temp;
+
+    const filteredAndReindexed = nuevas.filter(e => e.ruta_id === rutaSeleccionada.id);
+    filteredAndReindexed.forEach((e, i) => {
+      e.inputPos = (i + 1).toString();
+    });
+
     setEstudiantes(nuevas);
   };
 
   const cambiarPosicion = (index, texto) => {
+    const estudiantesDeRuta = estudiantes.filter(e => e.ruta_id === rutaSeleccionada.id);
+    const est = estudiantesDeRuta[index];
+    const globalIdx = estudiantes.findIndex(e => e.id === est.id);
+    if (globalIdx === -1) return;
+
     const nuevas = [...estudiantes];
-    nuevas[index].inputPos = texto;
+    nuevas[globalIdx].inputPos = texto;
     setEstudiantes(nuevas);
+
     const pos = parseInt(texto);
-    if (isNaN(pos) || pos < 1 || pos > estudiantes.length) return;
-    const [alumno] = nuevas.splice(index, 1);
-    nuevas.splice(pos - 1, 0, alumno);
-    nuevas.forEach((e, i) => { e.inputPos = (i + 1).toString(); });
-    setEstudiantes(nuevas);
+    if (isNaN(pos) || pos < 1 || pos > estudiantesDeRuta.length) return;
+
+    const deRuta = nuevas.filter(e => e.ruta_id === rutaSeleccionada.id);
+    const [alumno] = deRuta.splice(index, 1);
+    deRuta.splice(pos - 1, 0, alumno);
+
+    let deRutaIdx = 0;
+    const finalNuevas = nuevas.map(e => {
+      if (e.ruta_id === rutaSeleccionada.id) {
+        const item = deRuta[deRutaIdx++];
+        item.inputPos = deRutaIdx.toString();
+        return item;
+      }
+      return e;
+    });
+
+    setEstudiantes(finalNuevas);
   };
 
   if (loading) {
@@ -1136,11 +1203,7 @@ function RutaConductor({ navigation, usuario }) {
 
           <Text style={[styles.sectionLabel, { marginBottom: 20 }]}>{rutaIdEditando ? 'Editar Ruta' : 'Crear Nueva Ruta'}</Text>
 
-          {errorGuardar ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{errorGuardar}</Text>
-            </View>
-          ) : null}
+
 
           <View style={styles.formGroup}>
             <Text style={styles.inputLabel}>Nombre de la ruta *</Text>
@@ -1241,38 +1304,64 @@ function RutaConductor({ navigation, usuario }) {
             {formErrores.escuela_id && <Text style={styles.errorInline}>{formErrores.escuela_id}</Text>}
 
             {formEscuelaId ? (
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Ubicación de la escuela (Toca el mapa para marcarla) *</Text>
-                <View style={styles.formMapContainer}>
-                  <MapView
-                    style={styles.formMap}
-                    provider={PROVIDER_DEFAULT}
-                    initialRegion={{
-                      latitude: formEscuelaLat || 8.9833,
-                      longitude: formEscuelaLng || -79.5167,
-                      latitudeDelta: 0.03,
-                      longitudeDelta: 0.03,
-                    }}
-                    onPress={(e) => {
-                      const { latitude, longitude } = e.nativeEvent.coordinate;
-                      setFormEscuelaLat(latitude);
-                      setFormEscuelaLng(longitude);
-                    }}
-                  >
-                    {formEscuelaLat && formEscuelaLng && (
-                      <Marker
-                        coordinate={{ latitude: formEscuelaLat, longitude: formEscuelaLng }}
-                        title="Ubicación de la escuela"
-                      >
-                        <View style={styles.customMarkerHito}>
-                          <Text style={{ fontSize: 13 }}>🏫</Text>
-                        </View>
-                      </Marker>
-                    )}
-                  </MapView>
+              <>
+                {(() => {
+                  const escObj = listaEscuelas.find(e => e._id === formEscuelaId);
+                  if (!escObj) return null;
+                  return (
+                    <View style={{
+                      backgroundColor: '#F5F8FC',
+                      borderRadius: 16,
+                      padding: 16,
+                      borderColor: '#E3ECF7',
+                      borderWidth: 1,
+                      marginTop: 4,
+                      marginBottom: 16,
+                      gap: 8
+                    }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#0D1B3E', marginBottom: 2 }}>Información de la escuela</Text>
+                      <Text style={{ fontSize: 13, color: '#444' }}><Text style={{ fontWeight: '600' }}>Provincia:</Text> {escObj.provincia}</Text>
+                      <Text style={{ fontSize: 13, color: '#444' }}><Text style={{ fontWeight: '600' }}>Distrito:</Text> {escObj.distrito}</Text>
+                      {escObj.corregimiento ? (
+                        <Text style={{ fontSize: 13, color: '#444' }}><Text style={{ fontWeight: '600' }}>Corregimiento:</Text> {escObj.corregimiento}</Text>
+                      ) : null}
+                      {(escObj.indicaciones || escObj.direccion) ? (
+                        <Text style={{ fontSize: 13, color: '#666', fontStyle: 'italic', marginTop: 4 }}>
+                          <Text style={{ fontWeight: '600', fontStyle: 'normal' }}>Indicaciones:</Text> {escObj.indicaciones || escObj.direccion}
+                        </Text>
+                      ) : null}
+                    </View>
+                  );
+                })()}
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.inputLabel}>Ubicación geográfica de la escuela</Text>
+                  <View style={styles.formMapContainer}>
+                    <MapView
+                      key={`${formEscuelaLat}_${formEscuelaLng}`}
+                      style={styles.formMap}
+                      provider={PROVIDER_DEFAULT}
+                      initialRegion={{
+                        latitude: formEscuelaLat || 8.9833,
+                        longitude: formEscuelaLng || -79.5167,
+                        latitudeDelta: 0.015,
+                        longitudeDelta: 0.015,
+                      }}
+                    >
+                      {formEscuelaLat && formEscuelaLng && (
+                        <Marker
+                          coordinate={{ latitude: formEscuelaLat, longitude: formEscuelaLng }}
+                          title="Ubicación de la escuela"
+                        >
+                          <View style={styles.customMarkerHito}>
+                            <Text style={{ fontSize: 13 }}>🏫</Text>
+                          </View>
+                        </Marker>
+                      )}
+                    </MapView>
+                  </View>
                 </View>
-                {formErrores.escuela_map && <Text style={styles.errorInline}>{formErrores.escuela_map}</Text>}
-              </View>
+              </>
             ) : null}
           </View>
 
@@ -1401,6 +1490,12 @@ function RutaConductor({ navigation, usuario }) {
               </TouchableOpacity>
             </View>
           </View>
+
+          {errorGuardar ? (
+            <View style={[styles.errorContainer, { marginTop: 20, marginBottom: -10 }]}>
+              <Text style={styles.errorText}>{errorGuardar}</Text>
+            </View>
+          ) : null}
 
           <TouchableOpacity
             style={[styles.btnPrimary, { marginTop: 24, alignSelf: 'stretch' }]}
@@ -1534,7 +1629,31 @@ function RutaConductor({ navigation, usuario }) {
             <Text style={styles.tablaHeaderNombre}>Estudiante</Text>
             <TouchableOpacity
               style={[styles.btnEditar, editando && styles.btnEditarActivo]}
-              onPress={() => setEditando(!editando)}
+              onPress={async () => {
+                if (editando) {
+                  try {
+                    const token = await auth.currentUser.getIdToken();
+                    const deRuta = estudiantes.filter(e => e.ruta_id === rutaSeleccionada.id);
+                    
+                    const payloadEstudiantes = deRuta.map((e, idx) => ({
+                      estudiante_id: e.id,
+                      orden: idx + 1
+                    }));
+
+                    await api.patch(`/api/conductor/ruta/${rutaSeleccionada.id}`, {
+                      estudiantes: payloadEstudiantes
+                    }, {
+                      headers: { Authorization: `Bearer ${token}` }
+                    });
+                    
+                    Alert.alert('Éxito', 'El orden de recogida ha sido guardado correctamente.');
+                  } catch (err) {
+                    console.log('Error al guardar el orden de los estudiantes:', err.message);
+                    Alert.alert('Error', 'No se pudo guardar el orden de los estudiantes.');
+                  }
+                }
+                setEditando(!editando);
+              }}
             >
               <Ionicons name={editando ? 'checkmark-circle' : 'create-outline'} size={14} color={editando ? '#fff' : '#0D1B3E'} />
               <Text style={[styles.btnEditarText, editando && { color: '#fff' }]}>
@@ -1617,7 +1736,7 @@ function RutaConductor({ navigation, usuario }) {
       <View style={styles.statsRow}>
         <StatCard icon="map-outline" valor={rutas.length} label="Rutas activas" color="#0D1B3E" />
         <StatCard icon="people-outline" valor={estudiantes.length} label="Estudiantes" color="#00AEEF" />
-        <StatCard icon="school-outline" valor={[...new Set(estudiantes.map(e => e.escuela))].length} label="Escuelas" color="#FFD700" textColor="#0D1B3E" />
+        <StatCard icon="school-outline" valor={[...new Set(rutas.map(r => r.escuela_nombre))].filter(Boolean).length} label="Escuelas" color="#FFD700" textColor="#0D1B3E" />
       </View>
 
       {/* Lista de rutas */}

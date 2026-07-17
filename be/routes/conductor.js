@@ -88,6 +88,7 @@ router.get('/estudiantes', verifyToken, async (req, res) => {
           est.padre_id.ubicacion?.numero_casa
         ].filter(Boolean);
         estDoc.direccion = parts.length > 0 ? parts.join(', ') : (estDoc.direccion || 'Sin ubicación de recogida');
+        estDoc.zona = est.padre_id.ubicacion?.corregimiento || 'Sin corregimiento';
       }
       return estDoc;
     });
@@ -174,6 +175,7 @@ router.get('/ruta', verifyToken, async (req, res) => {
             student.padre_id.ubicacion?.numero_casa
           ].filter(Boolean);
           doc.direccion = parts.length > 0 ? parts.join(', ') : (doc.direccion || 'Sin ubicación de recogida');
+          doc.zona = student.padre_id.ubicacion?.corregimiento || 'Sin corregimiento';
         }
         return doc;
       }).sort((a, b) => a.orden - b.orden);
@@ -227,6 +229,7 @@ router.get('/ruta/:rutaId', verifyToken, async (req, res) => {
           student.padre_id.ubicacion?.numero_casa
         ].filter(Boolean);
         sDoc.direccion = parts.length > 0 ? parts.join(', ') : (sDoc.direccion || 'Sin ubicación de recogida');
+        sDoc.zona = student.padre_id.ubicacion?.corregimiento || 'Sin corregimiento';
       }
       return sDoc;
     }).sort((a, b) => a.orden - b.orden);
@@ -264,25 +267,48 @@ router.post('/ruta', verifyToken, async (req, res) => {
 
     const obtenerProvinciaPorPlaca = (placa) => {
       if (!placa) return null;
-      const match = placa.match(/^(\d{1,2})BC/i);
-      if (!match) return null;
-      const num = parseInt(match[1], 10);
-      switch (num) {
-        case 1: return 'Bocas del Toro';
-        case 2: return 'Coclé';
-        case 3: return 'Colón';
-        case 4: return 'Chiriquí';
-        case 5: return 'Darién';
-        case 6: return 'Herrera';
-        case 7: return 'Los Santos';
-        case 8: return 'Panamá';
-        case 9: return 'Veraguas';
-        case 10: return 'Guna Yala';
-        case 11: return 'Ngäbe-Buglé';
-        case 12: return 'Emberá-Wounaan';
-        case 13: return 'Panamá Oeste';
-        default: return null;
+      const cleanPlaca = placa.trim().toUpperCase();
+      const match = cleanPlaca.match(/^\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        switch (num) {
+          case 1: return 'Bocas del Toro';
+          case 2: return 'Coclé';
+          case 3: return 'Colón';
+          case 4: return 'Chiriquí';
+          case 5: return 'Darién';
+          case 6: return 'Herrera';
+          case 7: return 'Los Santos';
+          case 8: return 'Panamá';
+          case 9: return 'Veraguas';
+          case 10: return 'Guna Yala';
+          case 11: return 'Emberá-Wounaan';
+          case 12: return 'Ngäbe-Buglé';
+          case 13: return 'Panamá Oeste';
+          default: break;
+        }
       }
+      const innerMatch = cleanPlaca.match(/(?:^|[A-Z-])(\d+)(?:[A-Z-]|$)/);
+      if (innerMatch) {
+        const num = parseInt(innerMatch[1], 10);
+        switch (num) {
+          case 1: return 'Bocas del Toro';
+          case 2: return 'Coclé';
+          case 3: return 'Colón';
+          case 4: return 'Chiriquí';
+          case 5: return 'Darién';
+          case 6: return 'Herrera';
+          case 7: return 'Los Santos';
+          case 8: return 'Panamá';
+          case 9: return 'Veraguas';
+          case 10: return 'Guna Yala';
+          case 11: return 'Emberá-Wounaan';
+          case 12: return 'Ngäbe-Buglé';
+          case 13: return 'Panamá Oeste';
+          default: break;
+        }
+      }
+      return null;
     };
 
     const provinciaConductor = obtenerProvinciaPorPlaca(vehiculo.placa);
@@ -301,13 +327,31 @@ router.post('/ruta', verifyToken, async (req, res) => {
       else freqArray = [freqArray];
     }
 
-    // Verificar si ya existe una ruta del mismo conductor con el mismo horario de salida
-    const rutaExistente = await Ruta.findOne({
+    // Verificar si ya existe una ruta del mismo conductor con colisiones de horario (salida, llegada o vuelta)
+    const queryColision = {
       conductor_id: usuario._id,
-      horario_salida: horario_salida
-    });
+      $or: [
+        { horario_salida: horario_salida },
+        { horario_llegada: horario_llegada }
+      ]
+    };
+    if (hora_salida_vuelta) {
+      queryColision.$or.push({ hora_salida_vuelta: hora_salida_vuelta });
+    }
+
+    const rutaExistente = await Ruta.findOne(queryColision);
     if (rutaExistente) {
-      return res.status(400).json({ error: `Ya tienes otra ruta programada a las ${horario_salida}.` });
+      let detalleError = '';
+      if (rutaExistente.horario_salida === horario_salida) {
+        detalleError = `Ya tienes otra ruta con la misma hora de salida (${horario_salida}).`;
+      } else if (rutaExistente.horario_llegada === horario_llegada) {
+        detalleError = `Ya tienes otra ruta con la misma hora de llegada (${horario_llegada}).`;
+      } else if (hora_salida_vuelta && rutaExistente.hora_salida_vuelta === hora_salida_vuelta) {
+        detalleError = `Ya tienes otra ruta con la misma hora de salida de vuelta (${hora_salida_vuelta}).`;
+      } else {
+        detalleError = 'Ya tienes otra ruta con horarios que coinciden.';
+      }
+      return res.status(400).json({ error: detalleError });
     }
 
     const nuevaRuta = new Ruta({
@@ -322,8 +366,8 @@ router.post('/ruta', verifyToken, async (req, res) => {
       estudiantes: [],
       escuela: escuelaExiste.nombre,
       nombre: nombre_ruta,
-      escuela_lat: escuela_lat || null,
-      escuela_lng: escuela_lng || null,
+      escuela_lat: escuelaExiste.lat || null,
+      escuela_lng: escuelaExiste.lng || null,
       hora_salida_vuelta: hora_salida_vuelta || null
     });
 
@@ -353,7 +397,38 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para modificar esta ruta' });
     }
 
-    const { escuela_id, nombre_ruta, escuela, zona, horario_salida, horario_llegada, frecuencia, estado, escuela_lat, escuela_lng, hora_salida_vuelta } = req.body;
+    const { escuela_id, nombre_ruta, escuela, zona, horario_salida, horario_llegada, frecuencia, estado, escuela_lat, escuela_lng, hora_salida_vuelta, estudiantes } = req.body;
+
+    const checkSalida = horario_salida !== undefined ? horario_salida : ruta.horario_salida;
+    const checkLlegada = horario_llegada !== undefined ? horario_llegada : ruta.horario_llegada;
+    const checkVuelta = hora_salida_vuelta !== undefined ? hora_salida_vuelta : ruta.hora_salida_vuelta;
+
+    const queryColision = {
+      conductor_id: usuario._id,
+      _id: { $ne: req.params.rutaId },
+      $or: [
+        { horario_salida: checkSalida },
+        { horario_llegada: checkLlegada }
+      ]
+    };
+    if (checkVuelta) {
+      queryColision.$or.push({ hora_salida_vuelta: checkVuelta });
+    }
+
+    const rutaExistente = await Ruta.findOne(queryColision);
+    if (rutaExistente) {
+      let detalleError = '';
+      if (rutaExistente.horario_salida === checkSalida) {
+        detalleError = `Ya tienes otra ruta con la misma hora de salida (${checkSalida}).`;
+      } else if (rutaExistente.horario_llegada === checkLlegada) {
+        detalleError = `Ya tienes otra ruta con la misma hora de llegada (${checkLlegada}).`;
+      } else if (checkVuelta && rutaExistente.hora_salida_vuelta === checkVuelta) {
+        detalleError = `Ya tienes otra ruta con la misma hora de salida de vuelta (${checkVuelta}).`;
+      } else {
+        detalleError = 'Ya tienes otra ruta con horarios que coinciden.';
+      }
+      return res.status(400).json({ error: detalleError });
+    }
 
     if (escuela_id !== undefined) {
       const Escuela = mongoose.model('escuelas');
@@ -369,25 +444,48 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
 
       const obtenerProvinciaPorPlaca = (placa) => {
         if (!placa) return null;
-        const match = placa.match(/^(\d{1,2})BC/i);
-        if (!match) return null;
-        const num = parseInt(match[1], 10);
-        switch (num) {
-          case 1: return 'Bocas del Toro';
-          case 2: return 'Coclé';
-          case 3: return 'Colón';
-          case 4: return 'Chiriquí';
-          case 5: return 'Darién';
-          case 6: return 'Herrera';
-          case 7: return 'Los Santos';
-          case 8: return 'Panamá';
-          case 9: return 'Veraguas';
-          case 10: return 'Guna Yala';
-          case 11: return 'Ngäbe-Buglé';
-          case 12: return 'Emberá-Wounaan';
-          case 13: return 'Panamá Oeste';
-          default: return null;
+        const cleanPlaca = placa.trim().toUpperCase();
+        const match = cleanPlaca.match(/^\d+/);
+        if (match) {
+          const num = parseInt(match[0], 10);
+          switch (num) {
+            case 1: return 'Bocas del Toro';
+            case 2: return 'Coclé';
+            case 3: return 'Colón';
+            case 4: return 'Chiriquí';
+            case 5: return 'Darién';
+            case 6: return 'Herrera';
+            case 7: return 'Los Santos';
+            case 8: return 'Panamá';
+            case 9: return 'Veraguas';
+            case 10: return 'Guna Yala';
+            case 11: return 'Emberá-Wounaan';
+            case 12: return 'Ngäbe-Buglé';
+            case 13: return 'Panamá Oeste';
+            default: break;
+          }
         }
+        const innerMatch = cleanPlaca.match(/(?:^|[A-Z-])(\d+)(?:[A-Z-]|$)/);
+        if (innerMatch) {
+          const num = parseInt(innerMatch[1], 10);
+          switch (num) {
+            case 1: return 'Bocas del Toro';
+            case 2: return 'Coclé';
+            case 3: return 'Colón';
+            case 4: return 'Chiriquí';
+            case 5: return 'Darién';
+            case 6: return 'Herrera';
+            case 7: return 'Los Santos';
+            case 8: return 'Panamá';
+            case 9: return 'Veraguas';
+            case 10: return 'Guna Yala';
+            case 11: return 'Emberá-Wounaan';
+            case 12: return 'Ngäbe-Buglé';
+            case 13: return 'Panamá Oeste';
+            default: break;
+          }
+        }
+        return null;
       };
 
       const provinciaConductor = obtenerProvinciaPorPlaca(vehiculo.placa);
@@ -401,21 +499,13 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
 
       ruta.escuela_id = escuela_id;
       ruta.escuela = escuelaExiste.nombre;
+      ruta.escuela_lat = escuelaExiste.lat || null;
+      ruta.escuela_lng = escuelaExiste.lng || null;
     }
     if (nombre_ruta !== undefined) { ruta.nombre_ruta = nombre_ruta; ruta.nombre = nombre_ruta; }
     if (escuela !== undefined) ruta.escuela = escuela;
     if (zona !== undefined) ruta.zona = zona;
-    if (horario_salida !== undefined) {
-      const rutaExistente = await Ruta.findOne({
-        conductor_id: usuario._id,
-        horario_salida: horario_salida,
-        _id: { $ne: req.params.rutaId }
-      });
-      if (rutaExistente) {
-        return res.status(400).json({ error: `Ya tienes otra ruta programada a las ${horario_salida}.` });
-      }
-      ruta.horario_salida = horario_salida;
-    }
+    if (horario_salida !== undefined) ruta.horario_salida = horario_salida;
     if (horario_llegada !== undefined) ruta.horario_llegada = horario_llegada;
     if (frecuencia !== undefined) {
       let freqArray = frecuencia;
@@ -427,9 +517,12 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
       ruta.frecuencia = freqArray;
     }
     if (estado !== undefined) ruta.estado = estado;
-    if (escuela_lat !== undefined) ruta.escuela_lat = escuela_lat;
-    if (escuela_lng !== undefined) ruta.escuela_lng = escuela_lng;
+    if (escuela_lat !== undefined && escuela_id === undefined) ruta.escuela_lat = escuela_lat;
+    if (escuela_lng !== undefined && escuela_id === undefined) ruta.escuela_lng = escuela_lng;
     if (hora_salida_vuelta !== undefined) ruta.hora_salida_vuelta = hora_salida_vuelta;
+    if (estudiantes !== undefined) {
+      ruta.estudiantes = estudiantes;
+    }
 
     await ruta.save();
 

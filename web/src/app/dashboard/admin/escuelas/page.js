@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FiHome, FiPlus, FiSearch, FiTrash2, FiMapPin } from 'react-icons/fi';
+import { FiHome, FiPlus, FiSearch, FiTrash2, FiMapPin, FiEdit } from 'react-icons/fi';
 import { api } from '@/lib/api';
 
 const PROVINCIAS = [
@@ -30,11 +30,18 @@ export default function EscuelasPage() {
   const [search, setSearch]         = useState('');
   const [showModal, setShowModal]   = useState(false);
   const [guardando, setGuardando]   = useState(false);
+  const [editandoEscuelaId, setEditandoEscuelaId] = useState(null);
+  const [mapCenter, setMapCenter]   = useState({ lat: 8.9833, lng: -79.5167 });
   const [form, setForm] = useState({
-    nombre:    '',
-    provincia: '',
-    distrito:  '',
-    direccion: '',
+    nombre:        '',
+    provincia:     '',
+    distrito:      '',
+    corregimiento: '',
+    direccion:     '',
+    indicaciones:  '',
+    lat:           8.9833,
+    lng:           -79.5167,
+    estado:        'Activa'
   });
 
   useEffect(() => {
@@ -44,26 +51,78 @@ export default function EscuelasPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    const handleMessage = (e) => {
+      if (e.data && typeof e.data.lat === 'number' && typeof e.data.lng === 'number') {
+        setForm((prev) => ({
+          ...prev,
+          lat: e.data.lat,
+          lng: e.data.lng
+        }));
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   const distritosDisp = DISTRITOS[form.provincia] ?? [];
 
   const filtered = escuelas.filter((e) =>
     e.nombre.toLowerCase().includes(search.toLowerCase())   ||
     e.distrito?.toLowerCase().includes(search.toLowerCase()) ||
-    e.provincia?.toLowerCase().includes(search.toLowerCase())
+    e.provincia?.toLowerCase().includes(search.toLowerCase()) ||
+    e.corregimiento?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const resetForm = () => setForm({ nombre: '', provincia: '', distrito: '', direccion: '' });
+  const resetForm = () => {
+    setForm({
+      nombre: '',
+      provincia: '',
+      distrito: '',
+      corregimiento: '',
+      direccion: '',
+      indicaciones: '',
+      lat: 8.9833,
+      lng: -79.5167,
+      estado: 'Activa'
+    });
+    setEditandoEscuelaId(null);
+  };
+
+  const handleEditClick = (school) => {
+    const lat = school.lat || 8.9833;
+    const lng = school.lng || -79.5167;
+    setForm({
+      nombre: school.nombre || '',
+      provincia: school.provincia || '',
+      distrito: school.distrito || '',
+      corregimiento: school.corregimiento || '',
+      direccion: school.direccion || '',
+      indicaciones: school.indicaciones || '',
+      lat,
+      lng,
+      estado: school.estado || 'Activa'
+    });
+    setMapCenter({ lat, lng });
+    setEditandoEscuelaId(school._id);
+    setShowModal(true);
+  };
 
   const handleAdd = async () => {
     if (!form.nombre || !form.provincia || !form.distrito) return;
     setGuardando(true);
     try {
-      const data = await api.crearEscuela(form);
-      setEscuelas([data.escuela, ...escuelas]);
+      if (editandoEscuelaId) {
+        const data = await api.actualizarEscuela(editandoEscuelaId, form);
+        setEscuelas(escuelas.map((e) => e._id === editandoEscuelaId ? data.escuela : e));
+      } else {
+        const data = await api.crearEscuela(form);
+        setEscuelas([data.escuela, ...escuelas]);
+      }
       resetForm();
       setShowModal(false);
     } catch (err) {
-      alert('Error al crear escuela: ' + err.message);
+      alert('Error al guardar escuela: ' + err.message);
     } finally {
       setGuardando(false);
     }
@@ -111,7 +170,7 @@ export default function EscuelasPage() {
       {/* Botón agregar */}
       <button
         type="button"
-        onClick={() => setShowModal(true)}
+        onClick={() => { resetForm(); setMapCenter({ lat: 8.9833, lng: -79.5167 }); setShowModal(true); }}
         className="mb-5 flex h-14 w-full items-center justify-center gap-2 rounded-md bg-busway-yellow text-sm font-extrabold text-navy shadow-sm hover:bg-yellow-400 transition"
       >
         <FiPlus size={18} />
@@ -142,13 +201,15 @@ export default function EscuelasPage() {
                 <div className="mt-1.5 flex items-center gap-1.5 text-sm text-slate-500">
                   <FiMapPin size={13} className="shrink-0 text-busway-blue" />
                   <span className="truncate">
-                    {[e.provincia, e.distrito].filter(Boolean).join(' · ')}
+                    {[e.provincia, e.distrito, e.corregimiento].filter(Boolean).join(' · ')}
                   </span>
                 </div>
 
-                {/* Dirección si existe */}
-                {e.direccion && (
-                  <p className="mt-1 text-xs text-slate-400 truncate">{e.direccion}</p>
+                {/* Dirección e indicaciones si existen */}
+                {(e.indicaciones || e.direccion) && (
+                  <p className="mt-1 text-xs text-slate-400 truncate">
+                    {e.indicaciones || e.direccion}
+                  </p>
                 )}
 
                 <p className="mt-3 text-sm font-semibold text-slate-400">
@@ -164,6 +225,14 @@ export default function EscuelasPage() {
                 }`}>
                   {e.estado}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => handleEditClick(e)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-navy transition"
+                  aria-label="Editar escuela"
+                >
+                  <FiEdit size={16} />
+                </button>
                 <button
                   type="button"
                   onClick={() => handleDelete(e._id)}
@@ -184,14 +253,16 @@ export default function EscuelasPage() {
         )}
       </div>
 
-      {/* Modal agregar */}
+      {/* Modal agregar/editar */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-extrabold text-navy">Nueva escuela</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 overflow-y-auto">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl my-8">
+            <h2 className="text-lg font-extrabold text-navy">
+              {editandoEscuelaId ? 'Editar escuela' : 'Nueva escuela'}
+            </h2>
             <p className="mt-1 text-sm text-slate-500">Completa la información de la institución.</p>
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-5 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
 
               {/* Nombre */}
               <label className="block">
@@ -244,19 +315,69 @@ export default function EscuelasPage() {
                 </select>
               </label>
 
-              {/* Dirección adicional */}
+              {/* Corregimiento */}
               <label className="block">
                 <span className="mb-1 block text-sm font-semibold text-slate-700">
-                  Dirección <span className="text-slate-400 font-normal">(opcional)</span>
+                  Corregimiento
                 </span>
                 <input
                   type="text"
-                  value={form.direccion}
-                  onChange={(e) => setForm({ ...form, direccion: e.target.value })}
-                  placeholder="Ej. Calle 50, frente al parque"
+                  value={form.corregimiento}
+                  onChange={(e) => setForm({ ...form, corregimiento: e.target.value })}
+                  placeholder="Ej. Juan Díaz"
                   className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-busway-blue"
                 />
               </label>
+
+              {/* Indicaciones */}
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-slate-700">
+                  Indicaciones de dirección <span className="text-slate-400 font-normal">(opcional)</span>
+                </span>
+                <input
+                  type="text"
+                  value={form.indicaciones}
+                  onChange={(e) => setForm({ ...form, indicaciones: e.target.value, direccion: e.target.value })}
+                  placeholder="Ej. Frente al parque municipal, portón azul"
+                  className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-busway-blue"
+                />
+              </label>
+
+              {/* Mapa de Ubicación Geográfica */}
+              <div className="block">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-semibold text-slate-700">Ubicar en el Mapa</span>
+                  <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                    {form.lat.toFixed(5)}, {form.lng.toFixed(5)}
+                  </span>
+                </div>
+                <p className="mb-2 text-xs text-slate-500">
+                  Haz clic en el mapa o arrastra el marcador para ubicar la escuela.
+                </p>
+                <iframe
+                  key={`${editandoEscuelaId || 'nueva'}`}
+                  src={`/map.html?lat=${mapCenter.lat}&lng=${mapCenter.lng}`}
+                  className="w-full h-60 rounded-lg border border-slate-200 shadow-sm"
+                  style={{ border: 0 }}
+                  allowFullScreen=""
+                  loading="lazy"
+                ></iframe>
+              </div>
+
+              {/* Estado (solo visible al editar) */}
+              {editandoEscuelaId && (
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-slate-700">Estado</span>
+                  <select
+                    value={form.estado}
+                    onChange={(e) => setForm({ ...form, estado: e.target.value })}
+                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-busway-blue bg-white"
+                  >
+                    <option value="Activa">Activa</option>
+                    <option value="Inactiva">Inactiva</option>
+                  </select>
+                </label>
+              )}
 
             </div>
 

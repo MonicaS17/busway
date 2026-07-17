@@ -90,7 +90,16 @@ export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRuta
               headers: { Authorization: `Bearer ${idToken}` }
             });
             if (resPerfil.data) {
-              setConductorInfo(resPerfil.data.conductor);
+              const cond = resPerfil.data.conductor || {};
+              const veh = resPerfil.data.vehiculo;
+              if (veh) {
+                cond.datos_conductor = {
+                  ...cond.datos_conductor,
+                  vehiculo: `${veh.marca} ${veh.modelo}`,
+                  placa: veh.placa
+                };
+              }
+              setConductorInfo(cond);
             }
           } catch (err) {
             console.log('Error fetching conductor profile:', err.message);
@@ -113,6 +122,26 @@ export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRuta
 
           if (!rInfo) {
             setError('El conductor asignado no tiene una ruta configurada.');
+            setLoading(false);
+            return;
+          }
+
+          // Verificar si el padre tiene pago efectivo
+          let paid = false;
+          try {
+            const resAcuerdo = await api.get('/api/acuerdos/mis-acuerdos', {
+              headers: { Authorization: `Bearer ${idToken}` }
+            });
+            const ac = resAcuerdo.data?.acuerdo;
+            if (ac && ac.estado === 'activo' && ac.stripe_subscription_id) {
+              paid = true;
+            }
+          } catch (err) {
+            console.log('Error verifying parent agreement payment:', err.message);
+          }
+
+          if (!paid) {
+            setError('Acceso restringido. Debes registrar y completar tu pago para activar el seguimiento de la ruta.');
             setLoading(false);
             return;
           }
@@ -153,30 +182,15 @@ export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRuta
           setRutaInfo(r);
           setRutas(resRuta.data.rutas || []);
 
-          let estudiantesList = [];
-          if (resRuta.data && resRuta.data.estudiantes && resRuta.data.estudiantes.length > 0) {
-            estudiantesList = resRuta.data.estudiantes.map((e, idx) => ({
-              ...e,
-              id: e._id,
-              _id: e._id,
-              orden: e.orden || (idx + 1)
-            }));
-          }
-
-          if (estudiantesList.length > 0) {
-            setEstudiantes(estudiantesList);
-          } else {
-            const resEst = await api.get('/api/conductor/estudiantes', {
-              headers: { Authorization: `Bearer ${idToken}` }
-            });
-            const estudiantesObtenidos = resEst.data?.estudiantes || [];
-            setEstudiantes(estudiantesObtenidos.map((e, idx) => ({
-              ...e,
-              id: e._id,
-              _id: e._id,
-              orden: idx + 1
-            })));
-          }
+          const estudiantesList = (resRuta.data && resRuta.data.estudiantes)
+            ? resRuta.data.estudiantes.map((e, idx) => ({
+                ...e,
+                id: e._id,
+                _id: e._id,
+                orden: e.orden || (idx + 1)
+              }))
+            : [];
+          setEstudiantes(estudiantesList);
 
           try {
             const resViaje = await api.get('/api/viajes/activo/conductor', {

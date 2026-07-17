@@ -71,6 +71,8 @@ export default function DashboardScreen({ navigation, route }) {
     }
   }, [usuario.tipo]);
 
+  const [tienePagoEfectivo, setTienePagoEfectivo] = useState(false);
+
   const cargarAcuerdoPadre = useCallback(async () => {
     if (usuario.tipo !== 'padre') return;
     try {
@@ -79,13 +81,21 @@ export default function DashboardScreen({ navigation, route }) {
         headers: { Authorization: `Bearer ${token}` },
       });
       const activeAcuerdo = response.data?.acuerdo;
-      if (activeAcuerdo && activeAcuerdo.estado === 'activo' && !activeAcuerdo.stripe_subscription_id) {
-        setAcuerdoPendientePago(activeAcuerdo);
+      if (activeAcuerdo && activeAcuerdo.estado === 'activo') {
+        if (!activeAcuerdo.stripe_subscription_id) {
+          setAcuerdoPendientePago(activeAcuerdo);
+          setTienePagoEfectivo(false);
+        } else {
+          setAcuerdoPendientePago(null);
+          setTienePagoEfectivo(true);
+        }
       } else {
         setAcuerdoPendientePago(null);
+        setTienePagoEfectivo(false);
       }
     } catch (error) {
       console.log('Error al cargar acuerdo del padre:', error.message);
+      setTienePagoEfectivo(false);
     }
   }, [usuario.tipo]);
 
@@ -177,7 +187,26 @@ export default function DashboardScreen({ navigation, route }) {
 
   const tabs = [
     { icon: 'home-outline', label: 'Inicio', active: true },
-    { icon: 'location-outline', label: 'Viajes', onPress: () => navigation.navigate('Viaje', { usuario }) },
+    { 
+      icon: 'location-outline', 
+      label: 'Viajes', 
+      onPress: () => {
+        if (usuario.tipo === 'padre') {
+          if (!tienePagoEfectivo) {
+            Alert.alert(
+              'Servicio Inactivo',
+              'No puedes acceder al seguimiento en vivo. Debes registrar tu método de pago y completar el pago mensual para activar el servicio.',
+              [
+                { text: 'Configurar Pago', onPress: () => navigation.navigate('Pagos', { usuario }) },
+                { text: 'Cancelar', style: 'cancel' }
+              ]
+            );
+            return;
+          }
+        }
+        navigation.navigate('Viaje', { usuario });
+      } 
+    },
     {
       icon: 'notifications-outline',
       label: 'Avisos',

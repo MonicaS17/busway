@@ -10,9 +10,9 @@ export default function ViajeFinalizado({
   bottomInset
 }) {
   const total = estudiantes.length;
-  const entregados = estudiantes.filter(e => e.estado === 'entregado').length;
+  const entregados = estudiantes.filter(e => e.estado === 'entregado' || e.estado === 'abordo').length;
   const ausente = estudiantes.filter(e => e.estado === 'ausente').length;
-  const sinConfirmar = total - entregados - ausente;
+  const sinConfirmar = Math.max(0, total - entregados - ausente);
 
   const safeBottom = Math.max(bottomInset, 16);
 
@@ -33,8 +33,9 @@ export default function ViajeFinalizado({
       </View>
       <Text style={styles.finTitle}>¡Ruta completada!</Text>
       <Text style={styles.finDesc}>
-        {entregados} de {total} estudiantes fueron entregados exitosamente.
-        Los padres han sido notificados.
+        {ausente === total && total > 0
+          ? 'La ruta ha sido finalizada porque todos los estudiantes fueron marcados como ausentes.'
+          : 'Jornada completada con éxito. Los padres han sido notificados sobre el estado de sus hijos.'}
       </Text>
 
       <View style={styles.resumenFinal}>

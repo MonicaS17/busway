@@ -1453,20 +1453,6 @@ function FormularioUbicacion({ ubicacionInicial = null, onGuardar, onCancelar })
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [guardando, setGuardando] = useState(false);
 
-  const autocompleteFromCoords = (latitude, longitude) => {
-    if (latitude > 9.0 && longitude < -79.6) {
-      setProvincia('Panamá');
-      setDistrito('Panamá');
-      setCorregimiento('Bella Vista');
-    } else {
-      setProvincia('Panamá Oeste');
-      setDistrito('Arraiján');
-      setCorregimiento('Vista Alegre');
-    }
-  };
-
-
-
   const distritosDisp = DISTRITOS[provincia] ?? [];
   const corregimientosDisp = CORREGIMIENTOS[distrito] ?? [];
   const puedeGuardar = provincia && distrito && corregimiento;
@@ -1530,7 +1516,6 @@ function FormularioUbicacion({ ubicacionInicial = null, onGuardar, onCancelar })
                 const { latitude, longitude } = e.nativeEvent.coordinate;
                 setLat(latitude);
                 setLng(longitude);
-                autocompleteFromCoords(latitude, longitude);
               }}
             >
               <Marker
@@ -1540,7 +1525,6 @@ function FormularioUbicacion({ ubicacionInicial = null, onGuardar, onCancelar })
                   const { latitude, longitude } = e.nativeEvent.coordinate;
                   setLat(latitude);
                   setLng(longitude);
-                  autocompleteFromCoords(latitude, longitude);
                 }}
                 title="Ubicación de Recogida"
               />
