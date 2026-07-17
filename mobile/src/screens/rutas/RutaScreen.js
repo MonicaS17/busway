@@ -974,7 +974,7 @@ function RutaConductor({ navigation, usuario }) {
               {
                 text: 'Configurar Cobro',
                 onPress: () => {
-                  navigation.navigate('Payments');
+                  navigation.navigate('Pagos', { usuario });
                 }
               }
             ]

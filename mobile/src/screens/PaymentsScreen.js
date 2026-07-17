@@ -813,12 +813,12 @@ function VistaConductor({ navigation, usuario, onRefreshUsuario }) {
                 });
                 Alert.alert(
                   'Registro Exitoso',
-                  'Tu información de cobro ha sido guardada correctamente. Tu ruta ha sido publicada en el Marketplace.',
+                  'Tu información de cobro ha sido guardada correctamente. Tu ruta ha sido publicada.',
                   [
                     {
-                      text: 'Ver en Marketplace',
+                      text: 'Entendido',
                       onPress: () => {
-                        navigation.navigate('Marketplace', { usuario: perfilUsuario || usuario });
+                        navigation.navigate('Dashboard', { usuario: perfilUsuario || usuario });
                       }
                     }
                   ]
