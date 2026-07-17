@@ -192,9 +192,10 @@ export default function HijosQRScreen({ navigation, route }) {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      await Share.share({
-        url: filename,
-        message: `Aquí tienes el código QR de BusWay para ${hijo.nombre}`,
+      await Sharing.shareAsync(filename, {
+        mimeType: 'image/png',
+        dialogTitle: `Código QR de ${hijo.nombre}`,
+        UTI: 'public.png'
       });
     } catch (err) {
       console.error('Error sharing QR code:', err);
