@@ -16,14 +16,25 @@ async function notificarPadre(hijo_id, viaje_id, tipo_evento, titulo, mensaje) {
     const padre = await Usuario.findById(estudiante.padre_id);
     if (!padre) return;
 
-    // Verificar si el padre tiene un acuerdo activo con pago efectivo (stripe_subscription_id)
+    // Verificar si el padre tiene un acuerdo activo con pago efectivo para este hijo específico
     const Acuerdo = require('../models/Acuerdo');
+    const Solicitud = require('../models/Solicitud');
+    
+    // Buscar la solicitud aprobada que incluye a este hijo
+    const solicitud = await Solicitud.findOne({ hijos_ids: hijo_id, estado: 'aceptada' });
+    if (!solicitud) {
+      console.log(`[Notification Blocked] No se encontró una solicitud aceptada para el estudiante ${estudiante.nombre}. Notificación omitida.`);
+      return;
+    }
+
+    // Buscar el acuerdo activo correspondiente a esta solicitud y verificar si está pagado
     const acuerdoActivo = await Acuerdo.findOne({
-      padre_id: padre._id,
+      solicitud_id: solicitud._id,
       estado: 'activo'
     });
+
     if (!acuerdoActivo || !acuerdoActivo.stripe_subscription_id) {
-      console.log(`[Notification Blocked] El padre ${padre.nombre} no ha realizado el pago efectivo. Notificación omitida.`);
+      console.log(`[Notification Blocked] El acuerdo para el estudiante ${estudiante.nombre} (padre: ${padre.nombre}) no cuenta con pago activo. Notificación omitida.`);
       return;
     }
 

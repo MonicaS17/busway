@@ -152,9 +152,11 @@ function RutaPadre({ navigation, usuario, route }) {
           const resAcuerdo = await api.get('/api/acuerdos/mis-acuerdos', {
             headers: { Authorization: `Bearer ${token}` }
           });
-          if (resAcuerdo.data && resAcuerdo.data.acuerdo) {
-            activeAgreement = resAcuerdo.data.acuerdo;
-          }
+          const allAcuerdos = resAcuerdo.data?.acuerdos || [];
+          activeAgreement = allAcuerdos.find(ac => {
+            const hijosIds = ac.solicitud_id?.hijos_ids || [];
+            return hijosIds.some(h => String(h._id || h) === String(hijoSeleccionado._id));
+          }) || resAcuerdo.data?.acuerdo || null;
         } catch (err) {
           console.log('Error fetching active agreement:', err.message);
         }
