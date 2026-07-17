@@ -30,7 +30,18 @@ router.post('/create-setup-intent', verifyToken, async (req, res) => {
       });
     }
 
-    if (!usuario.stripe_customer_id) {
+    let customerExists = false;
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    if (usuario.stripe_customer_id) {
+      try {
+        await stripe.customers.retrieve(usuario.stripe_customer_id);
+        customerExists = true;
+      } catch (cErr) {
+        console.log(`[Stripe] Customer ${usuario.stripe_customer_id} not found in Stripe. Will recreate.`, cErr.message);
+      }
+    }
+
+    if (!usuario.stripe_customer_id || !customerExists) {
       const customer = await stripeService.crearCliente(usuario);
       usuario.stripe_customer_id = customer.id;
       await usuario.save();
@@ -193,7 +204,17 @@ router.post('/create-checkout-session', verifyToken, async (req, res) => {
       });
     }
 
-    if (!usuario.stripe_customer_id) {
+    let customerExists = false;
+    if (usuario.stripe_customer_id) {
+      try {
+        await stripe.customers.retrieve(usuario.stripe_customer_id);
+        customerExists = true;
+      } catch (cErr) {
+        console.log(`[Stripe] Customer ${usuario.stripe_customer_id} not found in Stripe. Will recreate.`, cErr.message);
+      }
+    }
+
+    if (!usuario.stripe_customer_id || !customerExists) {
       const customer = await stripeService.crearCliente(usuario);
       usuario.stripe_customer_id = customer.id;
       await usuario.save();
