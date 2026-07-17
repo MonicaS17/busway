@@ -1676,7 +1676,7 @@ function RutaConductor({ navigation, usuario }) {
       <View style={styles.statsRow}>
         <StatCard icon="map-outline" valor={rutas.length} label="Rutas activas" color="#0D1B3E" />
         <StatCard icon="people-outline" valor={estudiantes.length} label="Estudiantes" color="#00AEEF" />
-        <StatCard icon="school-outline" valor={[...new Set(estudiantes.map(e => e.escuela))].length} label="Escuelas" color="#FFD700" textColor="#0D1B3E" />
+        <StatCard icon="school-outline" valor={[...new Set(rutas.map(r => r.escuela_nombre))].filter(Boolean).length} label="Escuelas" color="#FFD700" textColor="#0D1B3E" />
       </View>
 
       {/* Lista de rutas */}
