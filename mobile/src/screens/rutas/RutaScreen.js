@@ -1167,11 +1167,7 @@ function RutaConductor({ navigation, usuario }) {
 
           <Text style={[styles.sectionLabel, { marginBottom: 20 }]}>{rutaIdEditando ? 'Editar Ruta' : 'Crear Nueva Ruta'}</Text>
 
-          {errorGuardar ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{errorGuardar}</Text>
-            </View>
-          ) : null}
+
 
           <View style={styles.formGroup}>
             <Text style={styles.inputLabel}>Nombre de la ruta *</Text>
@@ -1458,6 +1454,12 @@ function RutaConductor({ navigation, usuario }) {
               </TouchableOpacity>
             </View>
           </View>
+
+          {errorGuardar ? (
+            <View style={[styles.errorContainer, { marginTop: 20, marginBottom: -10 }]}>
+              <Text style={styles.errorText}>{errorGuardar}</Text>
+            </View>
+          ) : null}
 
           <TouchableOpacity
             style={[styles.btnPrimary, { marginTop: 24, alignSelf: 'stretch' }]}
