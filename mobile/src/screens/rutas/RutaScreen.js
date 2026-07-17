@@ -691,32 +691,63 @@ function RutaConductor({ navigation, usuario }) {
     setMostrarListaEscuelas(false);
     setBusquedaEscuela('');
     const escObj = listaEscuelas.find(e => e._id === escId);
-    if (escObj && escObj.distrito) {
-      setFormZona(escObj.distrito);
+    if (escObj) {
+      if (escObj.distrito) {
+        setFormZona(escObj.distrito);
+      }
+      if (escObj.lat) {
+        setFormEscuelaLat(escObj.lat);
+      }
+      if (escObj.lng) {
+        setFormEscuelaLng(escObj.lng);
+      }
     }
   };
 
   const obtenerProvinciaPorPlaca = (placa) => {
     if (!placa) return null;
-    const match = placa.match(/^(\d{1,2})BC/i);
-    if (!match) return null;
-    const num = parseInt(match[1], 10);
-    switch (num) {
-      case 1: return 'Bocas del Toro';
-      case 2: return 'Coclé';
-      case 3: return 'Colón';
-      case 4: return 'Chiriquí';
-      case 5: return 'Darién';
-      case 6: return 'Herrera';
-      case 7: return 'Los Santos';
-      case 8: return 'Panamá';
-      case 9: return 'Veraguas';
-      case 10: return 'Guna Yala';
-      case 11: return 'Ngäbe-Buglé';
-      case 12: return 'Emberá-Wounaan';
-      case 13: return 'Panamá Oeste';
-      default: return null;
+    const cleanPlaca = placa.trim().toUpperCase();
+    const match = cleanPlaca.match(/^\d+/);
+    if (match) {
+      const num = parseInt(match[0], 10);
+      switch (num) {
+        case 1: return 'Bocas del Toro';
+        case 2: return 'Coclé';
+        case 3: return 'Colón';
+        case 4: return 'Chiriquí';
+        case 5: return 'Darién';
+        case 6: return 'Herrera';
+        case 7: return 'Los Santos';
+        case 8: return 'Panamá';
+        case 9: return 'Veraguas';
+        case 10: return 'Guna Yala';
+        case 11: return 'Emberá-Wounaan';
+        case 12: return 'Ngäbe-Buglé';
+        case 13: return 'Panamá Oeste';
+        default: break;
+      }
     }
+    const innerMatch = cleanPlaca.match(/(?:^|[A-Z-])(\d+)(?:[A-Z-]|$)/);
+    if (innerMatch) {
+      const num = parseInt(innerMatch[1], 10);
+      switch (num) {
+        case 1: return 'Bocas del Toro';
+        case 2: return 'Coclé';
+        case 3: return 'Colón';
+        case 4: return 'Chiriquí';
+        case 5: return 'Darién';
+        case 6: return 'Herrera';
+        case 7: return 'Los Santos';
+        case 8: return 'Panamá';
+        case 9: return 'Veraguas';
+        case 10: return 'Guna Yala';
+        case 11: return 'Emberá-Wounaan';
+        case 12: return 'Ngäbe-Buglé';
+        case 13: return 'Panamá Oeste';
+        default: break;
+      }
+    }
+    return null;
   };
 
   const provinciaConductor = conductorVehiculo ? obtenerProvinciaPorPlaca(conductorVehiculo.placa) : null;
@@ -1241,38 +1272,64 @@ function RutaConductor({ navigation, usuario }) {
             {formErrores.escuela_id && <Text style={styles.errorInline}>{formErrores.escuela_id}</Text>}
 
             {formEscuelaId ? (
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Ubicación de la escuela (Toca el mapa para marcarla) *</Text>
-                <View style={styles.formMapContainer}>
-                  <MapView
-                    style={styles.formMap}
-                    provider={PROVIDER_DEFAULT}
-                    initialRegion={{
-                      latitude: formEscuelaLat || 8.9833,
-                      longitude: formEscuelaLng || -79.5167,
-                      latitudeDelta: 0.03,
-                      longitudeDelta: 0.03,
-                    }}
-                    onPress={(e) => {
-                      const { latitude, longitude } = e.nativeEvent.coordinate;
-                      setFormEscuelaLat(latitude);
-                      setFormEscuelaLng(longitude);
-                    }}
-                  >
-                    {formEscuelaLat && formEscuelaLng && (
-                      <Marker
-                        coordinate={{ latitude: formEscuelaLat, longitude: formEscuelaLng }}
-                        title="Ubicación de la escuela"
-                      >
-                        <View style={styles.customMarkerHito}>
-                          <Text style={{ fontSize: 13 }}>🏫</Text>
-                        </View>
-                      </Marker>
-                    )}
-                  </MapView>
+              <>
+                {(() => {
+                  const escObj = listaEscuelas.find(e => e._id === formEscuelaId);
+                  if (!escObj) return null;
+                  return (
+                    <View style={{
+                      backgroundColor: '#F5F8FC',
+                      borderRadius: 16,
+                      padding: 16,
+                      borderColor: '#E3ECF7',
+                      borderWidth: 1,
+                      marginTop: 4,
+                      marginBottom: 16,
+                      gap: 8
+                    }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#0D1B3E', marginBottom: 2 }}>Información de la escuela</Text>
+                      <Text style={{ fontSize: 13, color: '#444' }}><Text style={{ fontWeight: '600' }}>Provincia:</Text> {escObj.provincia}</Text>
+                      <Text style={{ fontSize: 13, color: '#444' }}><Text style={{ fontWeight: '600' }}>Distrito:</Text> {escObj.distrito}</Text>
+                      {escObj.corregimiento ? (
+                        <Text style={{ fontSize: 13, color: '#444' }}><Text style={{ fontWeight: '600' }}>Corregimiento:</Text> {escObj.corregimiento}</Text>
+                      ) : null}
+                      {(escObj.indicaciones || escObj.direccion) ? (
+                        <Text style={{ fontSize: 13, color: '#666', fontStyle: 'italic', marginTop: 4 }}>
+                          <Text style={{ fontWeight: '600', fontStyle: 'normal' }}>Indicaciones:</Text> {escObj.indicaciones || escObj.direccion}
+                        </Text>
+                      ) : null}
+                    </View>
+                  );
+                })()}
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.inputLabel}>Ubicación geográfica de la escuela</Text>
+                  <View style={styles.formMapContainer}>
+                    <MapView
+                      key={`${formEscuelaLat}_${formEscuelaLng}`}
+                      style={styles.formMap}
+                      provider={PROVIDER_DEFAULT}
+                      initialRegion={{
+                        latitude: formEscuelaLat || 8.9833,
+                        longitude: formEscuelaLng || -79.5167,
+                        latitudeDelta: 0.015,
+                        longitudeDelta: 0.015,
+                      }}
+                    >
+                      {formEscuelaLat && formEscuelaLng && (
+                        <Marker
+                          coordinate={{ latitude: formEscuelaLat, longitude: formEscuelaLng }}
+                          title="Ubicación de la escuela"
+                        >
+                          <View style={styles.customMarkerHito}>
+                            <Text style={{ fontSize: 13 }}>🏫</Text>
+                          </View>
+                        </Marker>
+                      )}
+                    </MapView>
+                  </View>
                 </View>
-                {formErrores.escuela_map && <Text style={styles.errorInline}>{formErrores.escuela_map}</Text>}
-              </View>
+              </>
             ) : null}
           </View>
 

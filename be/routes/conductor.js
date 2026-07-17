@@ -267,25 +267,48 @@ router.post('/ruta', verifyToken, async (req, res) => {
 
     const obtenerProvinciaPorPlaca = (placa) => {
       if (!placa) return null;
-      const match = placa.match(/^(\d{1,2})BC/i);
-      if (!match) return null;
-      const num = parseInt(match[1], 10);
-      switch (num) {
-        case 1: return 'Bocas del Toro';
-        case 2: return 'Coclé';
-        case 3: return 'Colón';
-        case 4: return 'Chiriquí';
-        case 5: return 'Darién';
-        case 6: return 'Herrera';
-        case 7: return 'Los Santos';
-        case 8: return 'Panamá';
-        case 9: return 'Veraguas';
-        case 10: return 'Guna Yala';
-        case 11: return 'Ngäbe-Buglé';
-        case 12: return 'Emberá-Wounaan';
-        case 13: return 'Panamá Oeste';
-        default: return null;
+      const cleanPlaca = placa.trim().toUpperCase();
+      const match = cleanPlaca.match(/^\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        switch (num) {
+          case 1: return 'Bocas del Toro';
+          case 2: return 'Coclé';
+          case 3: return 'Colón';
+          case 4: return 'Chiriquí';
+          case 5: return 'Darién';
+          case 6: return 'Herrera';
+          case 7: return 'Los Santos';
+          case 8: return 'Panamá';
+          case 9: return 'Veraguas';
+          case 10: return 'Guna Yala';
+          case 11: return 'Emberá-Wounaan';
+          case 12: return 'Ngäbe-Buglé';
+          case 13: return 'Panamá Oeste';
+          default: break;
+        }
       }
+      const innerMatch = cleanPlaca.match(/(?:^|[A-Z-])(\d+)(?:[A-Z-]|$)/);
+      if (innerMatch) {
+        const num = parseInt(innerMatch[1], 10);
+        switch (num) {
+          case 1: return 'Bocas del Toro';
+          case 2: return 'Coclé';
+          case 3: return 'Colón';
+          case 4: return 'Chiriquí';
+          case 5: return 'Darién';
+          case 6: return 'Herrera';
+          case 7: return 'Los Santos';
+          case 8: return 'Panamá';
+          case 9: return 'Veraguas';
+          case 10: return 'Guna Yala';
+          case 11: return 'Emberá-Wounaan';
+          case 12: return 'Ngäbe-Buglé';
+          case 13: return 'Panamá Oeste';
+          default: break;
+        }
+      }
+      return null;
     };
 
     const provinciaConductor = obtenerProvinciaPorPlaca(vehiculo.placa);
@@ -325,8 +348,8 @@ router.post('/ruta', verifyToken, async (req, res) => {
       estudiantes: [],
       escuela: escuelaExiste.nombre,
       nombre: nombre_ruta,
-      escuela_lat: escuela_lat || null,
-      escuela_lng: escuela_lng || null,
+      escuela_lat: escuelaExiste.lat || null,
+      escuela_lng: escuelaExiste.lng || null,
       hora_salida_vuelta: hora_salida_vuelta || null
     });
 
@@ -372,25 +395,48 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
 
       const obtenerProvinciaPorPlaca = (placa) => {
         if (!placa) return null;
-        const match = placa.match(/^(\d{1,2})BC/i);
-        if (!match) return null;
-        const num = parseInt(match[1], 10);
-        switch (num) {
-          case 1: return 'Bocas del Toro';
-          case 2: return 'Coclé';
-          case 3: return 'Colón';
-          case 4: return 'Chiriquí';
-          case 5: return 'Darién';
-          case 6: return 'Herrera';
-          case 7: return 'Los Santos';
-          case 8: return 'Panamá';
-          case 9: return 'Veraguas';
-          case 10: return 'Guna Yala';
-          case 11: return 'Ngäbe-Buglé';
-          case 12: return 'Emberá-Wounaan';
-          case 13: return 'Panamá Oeste';
-          default: return null;
+        const cleanPlaca = placa.trim().toUpperCase();
+        const match = cleanPlaca.match(/^\d+/);
+        if (match) {
+          const num = parseInt(match[0], 10);
+          switch (num) {
+            case 1: return 'Bocas del Toro';
+            case 2: return 'Coclé';
+            case 3: return 'Colón';
+            case 4: return 'Chiriquí';
+            case 5: return 'Darién';
+            case 6: return 'Herrera';
+            case 7: return 'Los Santos';
+            case 8: return 'Panamá';
+            case 9: return 'Veraguas';
+            case 10: return 'Guna Yala';
+            case 11: return 'Emberá-Wounaan';
+            case 12: return 'Ngäbe-Buglé';
+            case 13: return 'Panamá Oeste';
+            default: break;
+          }
         }
+        const innerMatch = cleanPlaca.match(/(?:^|[A-Z-])(\d+)(?:[A-Z-]|$)/);
+        if (innerMatch) {
+          const num = parseInt(innerMatch[1], 10);
+          switch (num) {
+            case 1: return 'Bocas del Toro';
+            case 2: return 'Coclé';
+            case 3: return 'Colón';
+            case 4: return 'Chiriquí';
+            case 5: return 'Darién';
+            case 6: return 'Herrera';
+            case 7: return 'Los Santos';
+            case 8: return 'Panamá';
+            case 9: return 'Veraguas';
+            case 10: return 'Guna Yala';
+            case 11: return 'Emberá-Wounaan';
+            case 12: return 'Ngäbe-Buglé';
+            case 13: return 'Panamá Oeste';
+            default: break;
+          }
+        }
+        return null;
       };
 
       const provinciaConductor = obtenerProvinciaPorPlaca(vehiculo.placa);
@@ -404,6 +450,8 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
 
       ruta.escuela_id = escuela_id;
       ruta.escuela = escuelaExiste.nombre;
+      ruta.escuela_lat = escuelaExiste.lat || null;
+      ruta.escuela_lng = escuelaExiste.lng || null;
     }
     if (nombre_ruta !== undefined) { ruta.nombre_ruta = nombre_ruta; ruta.nombre = nombre_ruta; }
     if (escuela !== undefined) ruta.escuela = escuela;
@@ -430,8 +478,8 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
       ruta.frecuencia = freqArray;
     }
     if (estado !== undefined) ruta.estado = estado;
-    if (escuela_lat !== undefined) ruta.escuela_lat = escuela_lat;
-    if (escuela_lng !== undefined) ruta.escuela_lng = escuela_lng;
+    if (escuela_lat !== undefined && escuela_id === undefined) ruta.escuela_lat = escuela_lat;
+    if (escuela_lng !== undefined && escuela_id === undefined) ruta.escuela_lng = escuela_lng;
     if (hora_salida_vuelta !== undefined) ruta.hora_salida_vuelta = hora_salida_vuelta;
 
     await ruta.save();

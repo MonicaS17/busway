@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../config/firebase';
 import api from '../config/api';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 export default function HijosQRScreen({ navigation, route }) {
 
@@ -21,6 +23,161 @@ export default function HijosQRScreen({ navigation, route }) {
   // Estados para ver el QR más grande
   const [modalQRVisible, setModalQRVisible] = useState(false);
   const [hijoParaQR, setHijoParaQR] = useState(null);
+
+  // Estados para editar nombre del hijo
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [hijoParaEditar, setHijoParaEditar] = useState(null);
+  const [nombreEditar, setNombreEditar] = useState('');
+  const [editando, setEditando] = useState(false);
+
+  const exportarQRComoPDF = async (hijo) => {
+    try {
+      if (!hijo.qr_code) {
+        Alert.alert('Error', 'Código QR no disponible.');
+        return;
+      }
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>QR de Asistencia - BusWay</title>
+            <style>
+              body {
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                margin: 0;
+                padding: 40px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background-color: #ffffff;
+                color: #0D1B3E;
+              }
+              .card {
+                border: 2px solid #E3ECF7;
+                border-radius: 30px;
+                padding: 40px;
+                text-align: center;
+                max-width: 450px;
+                box-shadow: 0 10px 30px rgba(13, 27, 62, 0.05);
+                background-color: #ffffff;
+              }
+              .logo {
+                font-size: 28px;
+                font-weight: 800;
+                color: #0D1B3E;
+                margin-bottom: 20px;
+                letter-spacing: 1px;
+              }
+              .logo span {
+                color: #FFC20A;
+              }
+              .title {
+                font-size: 20px;
+                font-weight: 700;
+                margin-bottom: 5px;
+                color: #0D1B3E;
+              }
+              .subtitle {
+                font-size: 14px;
+                color: #666666;
+                margin-bottom: 30px;
+              }
+              .qr-container {
+                display: inline-block;
+                padding: 20px;
+                background: #ffffff;
+                border: 2px solid #F0F4F8;
+                border-radius: 20px;
+                margin-bottom: 30px;
+              }
+              .qr-image {
+                width: 250px;
+                height: 250px;
+                display: block;
+              }
+              .info {
+                font-size: 12px;
+                color: #888888;
+                word-break: break-all;
+                background: #F5F8FC;
+                padding: 10px 15px;
+                border-radius: 10px;
+                font-family: monospace;
+              }
+              .footer {
+                margin-top: 30px;
+                font-size: 12px;
+                color: #aaaaaa;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="logo">Bus<span>Way</span></div>
+              <div class="title">${hijo.nombre}</div>
+              <div class="subtitle">Código QR Único de Asistencia Escolar</div>
+              
+              <div class="qr-container">
+                <img class="qr-image" src="${hijo.qr_code}" alt="Código QR de Asistencia" />
+              </div>
+              
+              <div class="info">ID: ${hijo._id}</div>
+              <div class="footer">Presente este código QR al conductor al subir y bajar del vehículo.</div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      
+      const pdfName = `${FileSystem.documentDirectory}QR_${hijo.nombre.replace(/\s+/g, '_')}.pdf`;
+      await FileSystem.moveAsync({
+        from: uri,
+        to: pdfName
+      });
+
+      await Sharing.shareAsync(pdfName, {
+        mimeType: 'application/pdf',
+        dialogTitle: `Código QR de ${hijo.nombre}`,
+        UTI: 'com.adobe.pdf'
+      });
+    } catch (err) {
+      console.error('Error al exportar QR a PDF:', err);
+      Alert.alert('Error', 'No se pudo generar o compartir el archivo PDF del código QR.');
+    }
+  };
+
+  const editarHijo = async () => {
+    if (!nombreEditar.trim()) {
+      Alert.alert('Campo requerido', 'Ingresa el nuevo nombre');
+      return;
+    }
+
+    try {
+      setEditando(true);
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.patch(
+        `/api/padre/hijos/${hijoParaEditar._id}`,
+        { nombre: nombreEditar.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setHijos(hijos.map(h => h._id === hijoParaEditar._id ? response.data.hijo : h));
+      setNombreEditar('');
+      setHijoParaEditar(null);
+      setEditModalVisible(false);
+      Alert.alert('Éxito', 'El nombre y código QR de tu hijo han sido actualizados.');
+    } catch (error) {
+      console.error('Error al editar hijo:', error);
+      const mensaje = error.response?.data?.error || 'No pudimos actualizar la información. Intenta de nuevo';
+      Alert.alert('Error', mensaje);
+    } finally {
+      setEditando(false);
+    }
+  };
 
   const descargarOCompartirQR = async (hijo) => {
     try {
@@ -177,23 +334,47 @@ export default function HijosQRScreen({ navigation, route }) {
 
                  <View style={styles.accionesRow}>
                   <TouchableOpacity 
-                    style={[styles.btnDescargar, { flex: 1 }]} 
+                    style={[styles.btnDescargar, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }]} 
                     activeOpacity={0.85}
                     onPress={() => {
                       setHijoParaQR(hijo);
                       setModalQRVisible(true);
                     }}
                   >
-                    <Ionicons name="download-outline" size={15} color="#0D1B3E" />
-                    <Text style={styles.btnDescargarText} numberOfLines={1}>QR</Text>
+                    <Ionicons name="qr-code-outline" size={14} color="#0D1B3E" />
+                    <Text style={styles.btnDescargarText} numberOfLines={1}>Ver QR</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: '#F5F8FC',
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: '#E3ECF7',
+                      gap: 4
+                    }} 
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setHijoParaEditar(hijo);
+                      setNombreEditar(hijo.nombre);
+                      setEditModalVisible(true);
+                    }}
+                  >
+                    <Ionicons name="create-outline" size={14} color="#0D1B3E" />
+                    <Text style={{ fontSize: 13, color: '#0D1B3E', fontWeight: '600' }} numberOfLines={1}>Editar</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.btnEliminar, { flex: 1 }]}
+                    style={[styles.btnEliminar, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }]}
                     activeOpacity={0.85}
                     onPress={() => eliminarHijo(hijo)}
                   >
-                    <Ionicons name="trash-outline" size={15} color="#E53935" />
+                    <Ionicons name="trash-outline" size={14} color="#E53935" />
                     <Text style={styles.btnEliminarText} numberOfLines={1}>Eliminar</Text>
                   </TouchableOpacity>
                 </View>
@@ -306,7 +487,7 @@ export default function HijosQRScreen({ navigation, route }) {
             <TouchableOpacity
               style={[styles.btnConfirmar, {
                 width: '100%',
-                marginBottom: 12,
+                marginBottom: 10,
                 backgroundColor: '#0D1B3E',
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -323,8 +504,32 @@ export default function HijosQRScreen({ navigation, route }) {
                 }
               }}
             >
-              <Ionicons name="share-social-outline" size={18} color="#FFF" style={{ marginRight: 8 }} />
-              <Text style={[styles.btnConfirmarText, { color: '#FFF' }]}>Compartir / Descargar</Text>
+              <Ionicons name="image-outline" size={18} color="#FFF" style={{ marginRight: 8 }} />
+              <Text style={[styles.btnConfirmarText, { color: '#FFF' }]}>Compartir como Imagen</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btnConfirmar, {
+                width: '100%',
+                marginBottom: 12,
+                backgroundColor: '#16A34A',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#16A34A',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 8,
+                elevation: 3
+              }]}
+              onPress={() => {
+                if (hijoParaQR) {
+                  exportarQRComoPDF(hijoParaQR);
+                }
+              }}
+            >
+              <Ionicons name="document-text-outline" size={18} color="#FFF" style={{ marginRight: 8 }} />
+              <Text style={[styles.btnConfirmarText, { color: '#FFF' }]}>Exportar como PDF</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -346,6 +551,57 @@ export default function HijosQRScreen({ navigation, route }) {
               <Text style={[styles.btnCancelarText, { color: '#0D1B3E', fontWeight: '600' }]}>Cerrar</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* Modal editar hijo */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ width: '100%', alignItems: 'center' }}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Editar nombre</Text>
+              <Text style={styles.modalDesc}>
+                Cambia el nombre de tu hijo. Su código QR único se regenerará automáticamente con la nueva información.
+              </Text>
+
+              <Text style={styles.label}>Nombre del hijo</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nombre completo"
+                placeholderTextColor="#aaa"
+                value={nombreEditar}
+                onChangeText={setNombreEditar}
+                editable={!editando}
+              />
+
+              <TouchableOpacity
+                style={[styles.btnConfirmar, editando && { opacity: 0.6 }]}
+                onPress={editarHijo}
+                disabled={editando}
+              >
+                {editando
+                  ? <ActivityIndicator color="#0D1B3E" />
+                  : <Text style={styles.btnConfirmarText}>Guardar Cambios</Text>
+                }
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.btnCancelar}
+                onPress={() => { setEditModalVisible(false); setHijoParaEditar(null); setNombreEditar(''); }}
+                disabled={editando}
+              >
+                <Text style={styles.btnCancelarText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
