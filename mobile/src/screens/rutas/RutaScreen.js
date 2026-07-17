@@ -236,7 +236,9 @@ function RutaPadre({ navigation, usuario, route }) {
           escuela: destinoEscuela,
           zona: rutaInfo.zona || 'Arraiján',
           frecuencia: formatFrecuencia(rutaInfo.frecuencia),
-          horario: rutaInfo.horario || '6:30 AM — 7:15 AM',
+          horario: (rutaInfo.horario_salida && rutaInfo.horario_llegada)
+            ? `${rutaInfo.horario_salida} — ${rutaInfo.horario_llegada}${rutaInfo.hora_salida_vuelta ? ` / Regreso: ${rutaInfo.hora_salida_vuelta}` : ''}`
+            : (rutaInfo.horario || '6:30 AM — 7:15 AM'),
           tarifa: activeAgreement ? activeAgreement.tarifa_mensual : (condInfo?.datos_conductor?.tarifa || 80),
           mesActual: activeAgreement ? activeAgreement.mes_actual : 1,
           totalMeses: activeAgreement ? activeAgreement.total_meses : 10,
@@ -297,30 +299,25 @@ function RutaPadre({ navigation, usuario, route }) {
   }
 
   const progreso = (ruta.mesActual / ruta.totalMeses) * 100;
-  const mostrarSelectorHijos = hijos.length > 1 && uniqueRutas.length > 1;
+  const mostrarSelectorHijos = hijos.length > 1;
   const hijosEnEstaRuta = ruta.hijos.filter(h => h.ruta_id === ruta.rutaIdActiva);
-  const gruposPorRuta = uniqueRutas.map(rutaId => {
-    const hijosDeRuta = hijos.filter(h => (h.ruta_id?._id?.toString() || h.ruta_id?.toString()) === rutaId);
-    return { rutaId, representante: hijosDeRuta[0], extra: hijosDeRuta.length - 1 };
-  });
 
   return (
     <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
       {/* Selector de hijos (chips) */}
       {mostrarSelectorHijos && (
         <>
-          <Text style={styles.sectionLabel}>Rutas de tus hijos asignados</Text>
+          <Text style={styles.sectionLabel}>Mis Hijos</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.hijosChipsRow}
           >
-            {gruposPorRuta.map((grupo) => {
-              const hijo = grupo.representante;
+            {hijos.map((hijo) => {
               const seleccionado = hijoSeleccionado?._id === hijo._id;
               return (
                 <TouchableOpacity
-                  key={grupo.rutaId}
+                  key={hijo._id}
                   style={[styles.hijoChip, seleccionado && styles.hijoChipSeleccionado]}
                   onPress={() => setHijoSeleccionado(hijo)}
                 >
@@ -328,11 +325,6 @@ function RutaPadre({ navigation, usuario, route }) {
                     <Text style={[styles.hijoAvatarText, seleccionado && styles.hijoChipAvatarTextSeleccionado]}>
                       {hijo.nombre.charAt(0)}
                     </Text>
-                    {grupo.extra > 0 && (
-                      <View style={styles.hijoChipExtraBadge}>
-                        <Text style={styles.hijoChipExtraBadgeText}>+{grupo.extra}</Text>
-                      </View>
-                    )}
                   </View>
                   <Text style={[styles.hijoChipNombre, seleccionado && styles.hijoChipNombreSeleccionado]}>
                     {hijo.nombre}

@@ -16,6 +16,27 @@ async function notificarPadre(hijo_id, viaje_id, tipo_evento, titulo, mensaje) {
     const padre = await Usuario.findById(estudiante.padre_id);
     if (!padre) return;
 
+    const nombreNino = estudiante.nombre;
+    let tituloPersonalizado = titulo;
+    let mensajePersonalizado = mensaje;
+
+    if (tipo_evento === 'viaje_iniciado') {
+      mensajePersonalizado = mensaje.replace('rumbo a la escuela.', `rumbo a la escuela para ${nombreNino}.`)
+                                   .replace('de regreso a casa.', `de regreso a casa para ${nombreNino}.`);
+    } else if (tipo_evento === 'en_escuela') {
+      mensajePersonalizado = `${nombreNino} ha llegado a la escuela.`;
+    } else if (tipo_evento === 'entregado_en_casa') {
+      mensajePersonalizado = mensaje.replace('Su hijo', nombreNino)
+                                   .replace('llego a casa', `${nombreNino} llegó a casa.`);
+    } else if (tipo_evento === 'recogido_en_casa') {
+      mensajePersonalizado = `${nombreNino} abordó el bus camino a la escuela.`;
+    } else if (tipo_evento === 'regreso_iniciado') {
+      mensajePersonalizado = `${nombreNino} abordó el bus camino a casa.`;
+    } else {
+      mensajePersonalizado = mensaje.replace('Su hijo', nombreNino)
+                                   .replace('hijo/a', nombreNino);
+    }
+
     // Buscar el viaje para obtener el conductor
     const viaje = await Viaje.findById(viaje_id);
     const conductor_id = viaje ? viaje.conductor_id : estudiante.conductor_id;
@@ -25,7 +46,7 @@ async function notificarPadre(hijo_id, viaje_id, tipo_evento, titulo, mensaje) {
       await Notificacion.create({
         conductor_id: conductor_id,
         tipo: 'individual',
-        mensaje: `${titulo} ${mensaje}`,
+        mensaje: `${tituloPersonalizado} - ${mensajePersonalizado}`,
         destinatarios: [padre._id],
         hijos_ids: [hijo_id],
         viaje_id: viaje_id,
@@ -39,8 +60,8 @@ async function notificarPadre(hijo_id, viaje_id, tipo_evento, titulo, mensaje) {
 
     await sendPushNotification({
       token: token,
-      titulo: titulo,
-      mensaje: mensaje,
+      titulo: tituloPersonalizado,
+      mensaje: mensajePersonalizado,
       data: {
         tipo: tipo_evento,
         estudianteId: String(hijo_id),
