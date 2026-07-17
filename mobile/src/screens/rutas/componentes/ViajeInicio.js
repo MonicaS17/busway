@@ -119,7 +119,15 @@ export default function ViajeInicio({
       <View style={styles.infoCard}>
         <FilaInfoViaje icon="school-outline"   label="Escuela"      valor={getSafeText(rutaInfo?.escuela, 'Colegio San Agustín')}  />
         <FilaInfoViaje icon="location-outline" label="Zonas"        valor={getSafeText(rutaInfo?.zona, 'Arraiján')} />
-        <FilaInfoViaje icon="time-outline"     label="Horario"      valor={getSafeText(rutaInfo?.horario, '6:30 AM — 7:15 AM')}    />
+        <FilaInfoViaje 
+          icon="time-outline"     
+          label="Horario"      
+          valor={
+            tipoViaje === 'vuelta'
+              ? (rutaInfo?.hora_salida_vuelta ? `Salida a las ${rutaInfo.hora_salida_vuelta}` : '12:30 PM')
+              : getSafeText(rutaInfo?.horario, '6:30 AM — 7:15 AM')
+          }    
+        />
         <FilaInfoViaje icon="people-outline"   label="Estudiantes"  valor={`${total} registrados`} last />
       </View>
     </ScrollView>

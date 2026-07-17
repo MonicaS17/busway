@@ -70,6 +70,7 @@ router.get('/mis-hijos', verifyToken, async (req, res) => {
         padre.ubicacion?.numero_casa
       ].filter(Boolean);
       hDoc.direccion = parts.length > 0 ? parts.join(', ') : (hDoc.direccion || 'Sin ubicación de recogida');
+      hDoc.zona = padre.ubicacion?.corregimiento || 'Sin corregimiento';
       
       return hDoc;
     });
@@ -122,6 +123,42 @@ router.patch('/estudiante/:id/ubicacion', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('Error al actualizar ubicación del estudiante:', error);
     res.status(500).json({ error: 'Error interno al actualizar ubicación del estudiante' });
+  }
+});
+
+// PATCH actualizar datos básicos del hijo (nombre) y regenerar su QR
+router.patch('/hijos/:id', verifyToken, async (req, res) => {
+  try {
+    const { nombre } = req.body;
+    if (!nombre || !nombre.trim()) {
+      return res.status(400).json({ error: 'El nombre es obligatorio' });
+    }
+
+    const padre = await Usuario.findOne({ firebase_uid: req.user.uid });
+    if (!padre || padre.tipo !== 'padre') {
+      return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    const hijo = await Estudiante.findOne({ _id: req.params.id, padre_id: padre._id });
+    if (!hijo) return res.status(404).json({ error: 'Hijo no encontrado o no te pertenece' });
+
+    hijo.nombre = nombre.trim();
+
+    // Regenerar el QR code codificado
+    const datosQR = JSON.stringify({
+      estudiante_id: hijo._id,
+      nombre: hijo.nombre,
+      padre_id: padre._id
+    });
+    const qrImagenBase64 = await QRCode.toDataURL(datosQR);
+    hijo.qr_code = qrImagenBase64;
+
+    await hijo.save();
+
+    res.json({ mensaje: 'Información del hijo actualizada con éxito y QR regenerado', hijo });
+  } catch (error) {
+    console.error('Error al editar datos del hijo:', error);
+    res.status(500).json({ error: 'Error interno al actualizar al hijo' });
   }
 });
 

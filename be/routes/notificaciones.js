@@ -6,6 +6,7 @@ const Usuario = require('../models/Usuario');
 const Estudiante = require('../models/Estudiante');
 const Viaje = require('../models/Viaje');
 const Notificacion = require('../models/Notificacion');
+const Acuerdo = require('../models/Acuerdo');
 
 async function usuarioAutenticado(req, res) {
   const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
@@ -34,6 +35,17 @@ function formatearNotificacion(notificacion, usuarioId) {
     createdAt: notificacion.createdAt,
     leida,
   };
+}
+
+async function filtrarPadresPagados(padresIds) {
+  if (!padresIds || padresIds.length === 0) return [];
+  const acuerdos = await Acuerdo.find({
+    padre_id: { $in: padresIds },
+    estado: 'activo',
+    stripe_subscription_id: { $exists: true, $ne: null }
+  }).select('padre_id');
+  const pagados = new Set(acuerdos.map(a => String(a.padre_id)));
+  return padresIds.filter(id => pagados.has(String(id)));
 }
 
 async function obtenerAsistentesDelDia(conductor, chosenRutaId) {
@@ -80,44 +92,46 @@ async function obtenerAsistentesDelDia(conductor, chosenRutaId) {
 }
 
 async function obtenerDestinatarios(conductor, audiencia, estudianteId, chosenRutaId) {
+  let result;
   if (audiencia === 'individual') {
     const estudiante = await Estudiante.findById(estudianteId).populate('padre_id', 'nombre apellido correo');
     if (!estudiante?.padre_id?._id) return { padresIds: [], hijosIds: [], viajeId: null };
 
-    return {
+    result = {
       padresIds: [estudiante.padre_id._id],
       hijosIds: [estudiante._id],
       viajeId: null,
     };
-  }
-
-  if (audiencia === 'asistentes') {
+  } else if (audiencia === 'asistentes') {
     const { estudiantes, viajeId } = await obtenerAsistentesDelDia(conductor, chosenRutaId);
 
     const estudiantesConPadre = estudiantes.filter((estudiante) => estudiante.padre_id?._id);
     const padresIds = [...new Set(estudiantesConPadre.map((estudiante) => String(estudiante.padre_id._id)))];
-    return {
+    result = {
       padresIds,
       hijosIds: estudiantesConPadre.map((estudiante) => estudiante._id),
       viajeId,
     };
+  } else {
+    // Todos (de una ruta específica si se pasa chosenRutaId, sino de todas)
+    const filter = {
+      conductor_id: conductor._id,
+      estado: 'Activo',
+    };
+    if (chosenRutaId) {
+      filter.ruta_id = chosenRutaId;
+    }
+    const estudiantes = await Estudiante.find(filter).select('_id padre_id');
+
+    result = {
+      padresIds: [...new Set(estudiantes.map((estudiante) => String(estudiante.padre_id)))],
+      hijosIds: estudiantes.map((estudiante) => estudiante._id),
+      viajeId: null,
+    };
   }
 
-  // Todos (de una ruta específica si se pasa chosenRutaId, sino de todas)
-  const filter = {
-    conductor_id: conductor._id,
-    estado: 'Activo',
-  };
-  if (chosenRutaId) {
-    filter.ruta_id = chosenRutaId;
-  }
-  const estudiantes = await Estudiante.find(filter).select('_id padre_id');
-
-  return {
-    padresIds: [...new Set(estudiantes.map((estudiante) => String(estudiante.padre_id)))],
-    hijosIds: estudiantes.map((estudiante) => estudiante._id),
-    viajeId: null,
-  };
+  result.padresIds = await filtrarPadresPagados(result.padresIds);
+  return result;
 }
 
 router.get('/conductor/asistentes', verifyToken, async (req, res) => {
@@ -218,6 +232,16 @@ router.get('/padre', verifyToken, async (req, res) => {
     if (!padre) return;
     if (padre.tipo !== 'padre') {
       return res.status(403).json({ error: 'Acceso exclusivo para padres' });
+    }
+
+    // Verificar si el padre tiene un acuerdo activo con pago efectivo
+    const acuerdoActivo = await Acuerdo.findOne({
+      padre_id: padre._id,
+      estado: 'activo'
+    });
+    if (!acuerdoActivo || !acuerdoActivo.stripe_subscription_id) {
+      // Si no ha pagado, no puede ver las notificaciones (devolvemos historial vacío)
+      return res.json({ notificaciones: [], sinLeer: 0 });
     }
 
     const notificaciones = await Notificacion.find({ destinatarios: padre._id })

@@ -16,6 +16,38 @@ async function notificarPadre(hijo_id, viaje_id, tipo_evento, titulo, mensaje) {
     const padre = await Usuario.findById(estudiante.padre_id);
     if (!padre) return;
 
+    // Verificar si el padre tiene un acuerdo activo con pago efectivo (stripe_subscription_id)
+    const Acuerdo = require('../models/Acuerdo');
+    const acuerdoActivo = await Acuerdo.findOne({
+      padre_id: padre._id,
+      estado: 'activo'
+    });
+    if (!acuerdoActivo || !acuerdoActivo.stripe_subscription_id) {
+      console.log(`[Notification Blocked] El padre ${padre.nombre} no ha realizado el pago efectivo. Notificación omitida.`);
+      return;
+    }
+
+    const nombreNino = estudiante.nombre;
+    let tituloPersonalizado = titulo;
+    let mensajePersonalizado = mensaje;
+
+    if (tipo_evento === 'viaje_iniciado') {
+      mensajePersonalizado = mensaje.replace('rumbo a la escuela.', `rumbo a la escuela para ${nombreNino}.`)
+                                   .replace('de regreso a casa.', `de regreso a casa para ${nombreNino}.`);
+    } else if (tipo_evento === 'en_escuela') {
+      mensajePersonalizado = `${nombreNino} ha llegado a la escuela.`;
+    } else if (tipo_evento === 'entregado_en_casa') {
+      mensajePersonalizado = mensaje.replace('Su hijo', nombreNino)
+                                   .replace('llego a casa', `${nombreNino} llegó a casa.`);
+    } else if (tipo_evento === 'recogido_en_casa') {
+      mensajePersonalizado = `${nombreNino} abordó el bus camino a la escuela.`;
+    } else if (tipo_evento === 'regreso_iniciado') {
+      mensajePersonalizado = `${nombreNino} abordó el bus camino a casa.`;
+    } else {
+      mensajePersonalizado = mensaje.replace('Su hijo', nombreNino)
+                                   .replace('hijo/a', nombreNino);
+    }
+
     // Buscar el viaje para obtener el conductor
     const viaje = await Viaje.findById(viaje_id);
     const conductor_id = viaje ? viaje.conductor_id : estudiante.conductor_id;
@@ -25,7 +57,7 @@ async function notificarPadre(hijo_id, viaje_id, tipo_evento, titulo, mensaje) {
       await Notificacion.create({
         conductor_id: conductor_id,
         tipo: 'individual',
-        mensaje: `${titulo} ${mensaje}`,
+        mensaje: `${tituloPersonalizado} - ${mensajePersonalizado}`,
         destinatarios: [padre._id],
         hijos_ids: [hijo_id],
         viaje_id: viaje_id,
@@ -39,8 +71,8 @@ async function notificarPadre(hijo_id, viaje_id, tipo_evento, titulo, mensaje) {
 
     await sendPushNotification({
       token: token,
-      titulo: titulo,
-      mensaje: mensaje,
+      titulo: tituloPersonalizado,
+      mensaje: mensajePersonalizado,
       data: {
         tipo: tipo_evento,
         estudianteId: String(hijo_id),
@@ -127,28 +159,61 @@ module.exports = (io) => {
           return;
         }
 
-        // Validación: bloquear inicio de ruta (tanto ida como vuelta) si no hay estudiantes a bordo
         const tipoEfectivo = tipo_viaje || 'ida';
+        const inicioDia = new Date();
+        inicioDia.setHours(0, 0, 0, 0);
+
+        // Validación 1: Si es viaje de vuelta, verificar que se haya iniciado la ida en la mañana
+        if (tipoEfectivo === 'vuelta') {
+          const viajeIda = await Viaje.findOne({
+            ruta_id: id_ruta,
+            conductor_id: id_conductor,
+            tipo_viaje: 'ida',
+            createdAt: { $gte: inicioDia }
+          });
+          if (!viajeIda || viajeIda.estado === 'en_espera') {
+            socket.emit('error:servidor', {
+              codigo: 'IDA_NO_INICIADA',
+              mensaje: 'No puedes iniciar el viaje de vuelta porque no se inició el viaje de ida de esta mañana.'
+            });
+            return;
+          }
+        }
+
+        // Validación 2: Si es viaje de ida, verificar si ya se hizo uno hoy sin haber completado el de vuelta
+        if (tipoEfectivo === 'ida') {
+          const viajeIdaExistente = await Viaje.findOne({
+            ruta_id: id_ruta,
+            conductor_id: id_conductor,
+            tipo_viaje: 'ida',
+            createdAt: { $gte: inicioDia }
+          });
+
+          if (viajeIdaExistente) {
+            const viajeVueltaExistente = await Viaje.findOne({
+              ruta_id: id_ruta,
+              conductor_id: id_conductor,
+              tipo_viaje: 'vuelta',
+              createdAt: { $gte: inicioDia }
+            });
+
+            if (!viajeVueltaExistente) {
+              socket.emit('error:servidor', {
+                codigo: 'IDA_DUPLICADA',
+                mensaje: 'Ya iniciaste un viaje de ida esta mañana. Debes completar el viaje de vuelta antes de poder iniciar otro viaje de ida.'
+              });
+              return;
+            }
+          }
+        }
+
+        // Buscar si existe viaje en_espera para esta sesión
         const viajeEnEspera = await Viaje.findOne({
           ruta_id: id_ruta,
           conductor_id: id_conductor,
           tipo_viaje: tipoEfectivo,
           estado: 'en_espera'
         });
-
-        if (viajeEnEspera) {
-          const asistiendo = viajeEnEspera.asistencias.some(
-            a => a.tipo === 'subida' || a.tipo === 'abordado'
-          );
-          if (!asistiendo) {
-            console.log(`⚠️ Intento de iniciar ruta ${id_ruta} (${tipoEfectivo}) sin ningún estudiante a bordo.`);
-            socket.emit('error:servidor', {
-              codigo: 'SIN_ESTUDIANTES_ABORDO',
-              mensaje: 'No puedes iniciar el viaje si no hay ningún estudiante a bordo (todos están ausentes o sin registrar asistencia).'
-            });
-            return;
-          }
-        }
 
         // Si existe un viaje 'en_espera' huérfano (de otra ruta o tipo),
         // finalizarlo antes de permitir la nueva jornada — NO bloquear.
@@ -184,6 +249,8 @@ module.exports = (io) => {
           });
           console.log(`▶️ Nuevo viaje creado ID: ${nuevoViaje._id} (${tipoEfectivo})`);
         }
+
+
 
         io.to(`sala:ruta:${id_ruta}`).emit('ruta:iniciada', {
           id_viaje: nuevoViaje._id,
@@ -235,8 +302,23 @@ module.exports = (io) => {
         if (viajeFinalizado.tipo_viaje === 'ida') {
           // Notificar solo a los padres de los estudiantes que realmente subieron al bus
           const estudiantesAsistieron = viajeFinalizado.estudiantes_abordo || [];
+          const ahora = new Date();
+
+          // Generar registros de bajada para todos los que asistieron
+          const nuevasAsistenciasBajada = estudiantesAsistieron.map(estId => ({
+            hijo_id: estId,
+            tipo: 'bajada',
+            metodo_registro: 'automatico',
+            fecha_hora: ahora
+          }));
+
+          // Actualizar el viaje agregando los registros de bajada en las asistencias
+          await Viaje.findByIdAndUpdate(id_viaje, {
+            $push: { asistencias: { $each: nuevasAsistenciasBajada } }
+          });
+
           for (const estId of estudiantesAsistieron) {
-            await notificarPadre(estId, viajeFinalizado._id, 'en_escuela', '🏫 ¡Llegada a la escuela!', 'Su hijo ha llegado a la escuela de manera segura.');
+            await notificarPadre(estId, viajeFinalizado._id, 'en_escuela', '🏫 ¡Llegada!', 'llego a la escuela');
           }
 
           // El viaje de ida termina; la vuelta se crea solo cuando el conductor la inicie.
@@ -294,11 +376,11 @@ module.exports = (io) => {
           createdAt: { $gte: inicioDia }
         }).sort({ createdAt: -1 });
 
-        if (!viajeIda) {
-          console.warn(`⚠️ No se encontró viaje de ida para ruta ${id_ruta}. No se puede crear vuelta.`);
+        if (!viajeIda || viajeIda.estado === 'en_espera') {
+          console.warn(`⚠️ El viaje de ida no fue iniciado para la ruta ${id_ruta}. No se puede crear vuelta.`);
           socket.emit('error:servidor', {
-            codigo: 'IDA_NO_ENCONTRADA',
-            mensaje: 'No se encontró el viaje de ida de hoy. No es posible crear el viaje de vuelta.'
+            codigo: 'IDA_NO_INICIADA',
+            mensaje: 'No puedes iniciar el viaje de vuelta porque no se inició el viaje de ida de esta mañana.'
           });
           return;
         }
@@ -313,21 +395,34 @@ module.exports = (io) => {
           console.log(`✅ Viaje de ida ${viajeIda._id} cerrado automáticamente.`);
         }
 
-        // Crear el viaje de vuelta
+        // Crear el viaje de vuelta activo directamente
         const viajeVuelta = await Viaje.create({
           ruta_id: id_ruta,
           conductor_id: id_conductor,
-          estado: 'en_espera',
+          estado: 'activo',
           tipo_viaje: 'vuelta',
-          hora_salida: null
+          hora_salida: new Date()
         });
 
         console.log(`Viaje de vuelta creado bajo demanda ID: ${viajeVuelta._id}`);
 
-        // ACK con el id del nuevo viaje de vuelta
+        // Notificar a todos los padres de los niños de esta ruta que el viaje de vuelta ha iniciado
+        try {
+          const Estudiante = require('../models/Estudiante');
+          const estudiantesRuta = await Estudiante.find({ ruta_id: id_ruta, estado: 'Activo' });
+          const titulo = '🚌 Viaje de vuelta iniciado';
+          const mensaje = 'El conductor ha iniciado el viaje de regreso a casa.';
+          for (const est of estudiantesRuta) {
+            await notificarPadre(est._id, viajeVuelta._id, 'viaje_iniciado', titulo, mensaje);
+          }
+        } catch (err) {
+          console.error('Error al enviar notificaciones de inicio de viaje de vuelta:', err);
+        }
+
+        // ACK con el id del nuevo viaje de vuelta activo
         io.to(`sala:ruta:${id_ruta}`).emit('ruta:transicion_vuelta', {
           id_viaje: viajeVuelta._id,
-          estado: 'en_espera',
+          estado: 'activo',
           tipo_viaje: 'vuelta'
         });
       } catch (error) {
@@ -343,7 +438,7 @@ module.exports = (io) => {
         const ahora = new Date();
 
         // Verificar si ya existe un registro para este estudiante en este viaje con el mismo tipo
-        const viajeActual = await Viaje.findById(id_viaje, { asistencias: 1 });
+        const viajeActual = await Viaje.findById(id_viaje, { asistencias: 1, tipo_viaje: 1 });
         if (!viajeActual) {
           console.warn(`⚠️ Viaje ${id_viaje} no encontrado para registrar asistencia.`);
           return;
@@ -401,17 +496,17 @@ module.exports = (io) => {
           if (tipo === 'subida') {
             tipoNotificacion = 'recogido_en_casa';
             tituloNotif = '🚌 ¡Abordo!';
-            mensajeNotif = 'Su hijo ha sido recogido y va en camino a la escuela.';
+            mensajeNotif = 'abordo camino a la escuela';
           }
         } else if (tipoViaje === 'vuelta') {
           if (tipo === 'subida') {
             tipoNotificacion = 'regreso_iniciado';
-            tituloNotif = '🚌 ¡Regreso iniciado!';
-            mensajeNotif = 'El conductor ya salió de la escuela con su hijo.';
+            tituloNotif = '🚌 ¡Abordo!';
+            mensajeNotif = 'abordo camino a casa';
           } else if (tipo === 'bajada') {
             tipoNotificacion = 'entregado_en_casa';
-            tituloNotif = '🏠 ¡Llegada exitosa!';
-            mensajeNotif = 'Su hijo ha sido entregado de forma segura en casa.';
+            tituloNotif = '🏠 ¡Llegada!';
+            mensajeNotif = 'llego a casa';
           }
         }
 
@@ -431,7 +526,7 @@ module.exports = (io) => {
         const tipoEfectivo = tipo || 'subida';
 
         // Verificar si ya existe un registro con el mismo hijo_id y tipo en este viaje
-        const viajeActual = await Viaje.findById(id_viaje, { asistencias: 1 });
+        const viajeActual = await Viaje.findById(id_viaje, { asistencias: 1, tipo_viaje: 1 });
         if (!viajeActual) {
           console.warn(`⚠️ Viaje ${id_viaje} no encontrado para registrar asistencia manual.`);
           return;
@@ -453,22 +548,42 @@ module.exports = (io) => {
 
         const nuevaAsistencia = {
           hijo_id,
-          tipo: tipoEfectivo,
+          tipo: estado === 'ausente' ? 'ausente' : tipoEfectivo,
           metodo_registro: 'manual',
           fecha_hora: ahora,
           latitud: lat || null,
           longitud: lng || null
         };
 
-        await Viaje.findByIdAndUpdate(
+        const viajeActualizado = await Viaje.findByIdAndUpdate(
           id_viaje,
           {
             $push: { asistencias: nuevaAsistencia },
-            ...(estado === 'abordado' && { $addToSet: { estudiantes_abordo: hijo_id } }),
+            ...((estado === 'abordado' || estado === 'abordo') && { $addToSet: { estudiantes_abordo: hijo_id } }),
             ...(estado === 'ausente' && { $pull: { estudiantes_abordo: hijo_id } }),
             ...(estado === 'entregado' && { $pull: { estudiantes_abordo: hijo_id } })
-          }
+          },
+          { new: true }
         );
+
+        // Verificar si todos los estudiantes de la ruta están ausentes
+        const Estudiante = require('../models/Estudiante');
+        const estudiantesRuta = await Estudiante.find({ ruta_id: id_ruta, estado: 'Activo' });
+        const totalAusentes = viajeActualizado.asistencias.filter(a => a.tipo === 'ausente').length;
+
+        if (totalAusentes === estudiantesRuta.length && estudiantesRuta.length > 0) {
+          console.log(`ℹ️ Todos los estudiantes (${totalAusentes}/${estudiantesRuta.length}) están ausentes. Finalizando ruta automáticamente.`);
+          await Viaje.findByIdAndUpdate(id_viaje, {
+            estado: 'finalizado',
+            hora_llegada: ahora,
+            estudiantes_abordo: []
+          });
+          io.to(`sala:ruta:${id_ruta}`).emit('ruta:finalizada');
+          socket.emit('error:servidor', {
+            codigo: 'TODOS_AUSENTES',
+            mensaje: 'La ruta ha sido finalizada automáticamente porque todos los estudiantes fueron marcados como ausentes.'
+          });
+        }
 
         console.log(`📲 Registro manual [${estado}] para el estudiante ${hijo_id}`);
 
@@ -486,20 +601,28 @@ module.exports = (io) => {
         let mensajeNotif = '';
 
         if (tipoViaje === 'ida') {
-          if (estado === 'abordado') {
+          if (estado === 'abordado' || estado === 'abordo') {
             tipoNotificacion = 'recogido_en_casa';
             tituloNotif = '🚌 ¡Abordo!';
-            mensajeNotif = 'Su hijo ha sido recogido y va en camino a la escuela.';
+            mensajeNotif = 'abordo camino a la escuela';
+          } else if (estado === 'ausente') {
+            tipoNotificacion = 'ausente';
+            tituloNotif = '⚠️ Reporte de inasistencia';
+            mensajeNotif = 'ausente';
           }
         } else if (tipoViaje === 'vuelta') {
-          if (estado === 'abordado') {
+          if (estado === 'abordado' || estado === 'abordo') {
             tipoNotificacion = 'regreso_iniciado';
-            tituloNotif = '🚌 ¡Regreso iniciado!';
-            mensajeNotif = 'El conductor ya salió de la escuela con su hijo.';
+            tituloNotif = '🚌 ¡Abordo!';
+            mensajeNotif = 'abordo camino a casa';
           } else if (estado === 'entregado') {
             tipoNotificacion = 'entregado_en_casa';
-            tituloNotif = '🏠 ¡Llegada exitosa!';
-            mensajeNotif = 'Su hijo ha sido entregado de forma segura en casa.';
+            tituloNotif = '🏠 ¡Llegada!';
+            mensajeNotif = 'llego a casa';
+          } else if (estado === 'ausente') {
+            tipoNotificacion = 'ausente';
+            tituloNotif = '⚠️ Reporte de inasistencia';
+            mensajeNotif = 'ausente';
           }
         }
 

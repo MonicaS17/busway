@@ -10,17 +10,38 @@ router.post('/create-setup-intent', verifyToken, async (req, res) => {
     const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
     if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    const acuerdo = await Acuerdo.findOne({
-      padre_id: usuario._id,
-      estado: 'activo',
-    });
+    const { acuerdoId } = req.body;
+    let acuerdo;
+    if (acuerdoId) {
+      acuerdo = await Acuerdo.findOne({
+        _id: acuerdoId,
+        padre_id: usuario._id,
+        estado: 'activo'
+      });
+    } else {
+      acuerdo = await Acuerdo.findOne({
+        padre_id: usuario._id,
+        estado: 'activo',
+      });
+    }
     if (!acuerdo) {
       return res.status(400).json({
         error: 'No tienes un contrato activo. Debes tener un acuerdo aceptado primero.',
       });
     }
 
-    if (!usuario.stripe_customer_id) {
+    let customerExists = false;
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    if (usuario.stripe_customer_id) {
+      try {
+        await stripe.customers.retrieve(usuario.stripe_customer_id);
+        customerExists = true;
+      } catch (cErr) {
+        console.log(`[Stripe] Customer ${usuario.stripe_customer_id} not found in Stripe. Will recreate.`, cErr.message);
+      }
+    }
+
+    if (!usuario.stripe_customer_id || !customerExists) {
       const customer = await stripeService.crearCliente(usuario);
       usuario.stripe_customer_id = customer.id;
       await usuario.save();
@@ -163,17 +184,37 @@ router.post('/create-checkout-session', verifyToken, async (req, res) => {
     const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
     if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    const acuerdo = await Acuerdo.findOne({
-      padre_id: usuario._id,
-      estado: 'activo',
-    });
+    const { acuerdoId } = req.body;
+    let acuerdo;
+    if (acuerdoId) {
+      acuerdo = await Acuerdo.findOne({
+        _id: acuerdoId,
+        padre_id: usuario._id,
+        estado: 'activo'
+      });
+    } else {
+      acuerdo = await Acuerdo.findOne({
+        padre_id: usuario._id,
+        estado: 'activo',
+      });
+    }
     if (!acuerdo) {
       return res.status(400).json({
         error: 'No tienes un contrato activo. Debes tener un acuerdo aceptado primero.',
       });
     }
 
-    if (!usuario.stripe_customer_id) {
+    let customerExists = false;
+    if (usuario.stripe_customer_id) {
+      try {
+        await stripe.customers.retrieve(usuario.stripe_customer_id);
+        customerExists = true;
+      } catch (cErr) {
+        console.log(`[Stripe] Customer ${usuario.stripe_customer_id} not found in Stripe. Will recreate.`, cErr.message);
+      }
+    }
+
+    if (!usuario.stripe_customer_id || !customerExists) {
       const customer = await stripeService.crearCliente(usuario);
       usuario.stripe_customer_id = customer.id;
       await usuario.save();

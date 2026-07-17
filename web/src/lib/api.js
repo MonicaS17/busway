@@ -29,6 +29,8 @@ export const api = {
   getEscuelas: () => apiFetch('/api/escuelas'),
   crearEscuela: (data) =>
     apiFetch('/api/escuelas', { method: 'POST', body: JSON.stringify(data) }),
+  actualizarEscuela: (id, data) =>
+    apiFetch(`/api/escuelas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   eliminarEscuela: (id) =>
     apiFetch(`/api/escuelas/${id}`, { method: 'DELETE' }),
   getPagos: () => apiFetch('/api/pagos'),

@@ -62,43 +62,59 @@ function ViajeActivoPadre({
   //Mapeo de estados visuales para la pantalla del padre
   let estadoVisual = 'esperando_ida';
 
-  if (faseViaje === 'sin_viaje') {
-    estadoVisual = 'esperando_ida';
-  } else if (faseViaje === 'entre_viajes') {
-    estadoVisual = 'en_escuela';
-  } else if (rutaActiva || faseViaje === 'en_curso') {
-    if (tipoViaje === 'vuelta') {
-      if (estadoHijo === 'entregado') {
-        estadoVisual = 'entregado';
-      } else if (estadoHijo === 'abordo') {
-        estadoVisual = 'regreso_iniciado';
-      } else {
-        estadoVisual = 'en_escuela';
-      }
+  if (estadoHijo === 'ausente') {
+    estadoVisual = 'ausente';
+  } else if (tipoViaje === 'vuelta') {
+    if (estadoHijo === 'entregado') {
+      estadoVisual = 'entregado_vuelta';
+    } else if (estadoHijo === 'abordo') {
+      estadoVisual = 'abordo_vuelta';
     } else {
-      // Ida
-      if (estadoHijo === 'abordo') {
-        estadoVisual = 'recogido_en_casa';
+      if (rutaActiva || faseViaje === 'en_curso') {
+        estadoVisual = 'esperando_vuelta_activo';
       } else {
-        estadoVisual = 'esperando_ida';
+        estadoVisual = 'esperando_vuelta_inactivo';
+      }
+    }
+  } else {
+    // Ida (Mañana)
+    if (estadoHijo === 'entregado' || faseViaje === 'entre_viajes') {
+      estadoVisual = 'en_escuela';
+    } else if (estadoHijo === 'abordo') {
+      estadoVisual = 'abordo_ida';
+    } else {
+      if (rutaActiva || faseViaje === 'en_curso') {
+        estadoVisual = 'esperando_ida_activo';
+      } else {
+        estadoVisual = 'esperando_ida_inactivo';
       }
     }
   }
 
   const configVisual = {
-    esperando_ida: {
+    // Ida - Mañana
+    esperando_ida_inactivo: {
       icono: 'time-outline',
-      titulo: 'Esperando recogida',
+      titulo: 'Viaje no iniciado',
       mensaje: 'El conductor aún no ha iniciado la ruta.',
       colorFondo: '#F5F8FC',
       colorTexto: '#0D1B3E',
       colorIcono: '#888',
       activo: false
     },
-    recogido_en_casa: {
+    esperando_ida_activo: {
       icono: 'bus-outline',
-      titulo: 'En camino a la escuela',
-      mensaje: 'Tu hijo fue recogido y va en camino a la escuela.',
+      titulo: 'Ruta iniciada',
+      mensaje: 'Esperando a recoger',
+      colorFondo: '#3B82F6',
+      colorTexto: '#fff',
+      colorIcono: '#fff',
+      activo: true
+    },
+    abordo_ida: {
+      icono: 'checkmark-circle-outline',
+      titulo: 'Ruta iniciada',
+      mensaje: 'Abordo',
       colorFondo: '#10B981',
       colorTexto: '#fff',
       colorIcono: '#fff',
@@ -106,34 +122,65 @@ function ViajeActivoPadre({
     },
     en_escuela: {
       icono: 'school-outline',
-      titulo: 'En la escuela',
-      mensaje: 'Tu hijo llegó a la escuela. El viaje de regreso iniciará más tarde.',
-      colorFondo: '#3B82F6',
+      titulo: 'Ruta finalizada',
+      mensaje: 'Llegada a la escuela',
+      colorFondo: '#0D1B3E',
       colorTexto: '#fff',
       colorIcono: '#fff',
       activo: false
     },
-    regreso_iniciado: {
-      icono: 'home-outline',
-      titulo: 'Va en camino a casa',
-      mensaje: 'El conductor ya salió de la escuela con tu hijo.',
-      colorFondo: '#F59E0B',
+
+    // Vuelta - Tarde
+    esperando_vuelta_inactivo: {
+      icono: 'time-outline',
+      titulo: 'Viaje no iniciado',
+      mensaje: 'El conductor aún no ha iniciado la ruta.',
+      colorFondo: '#F5F8FC',
+      colorTexto: '#0D1B3E',
+      colorIcono: '#888',
+      activo: false
+    },
+    esperando_vuelta_activo: {
+      icono: 'bus-outline',
+      titulo: 'Ruta iniciada',
+      mensaje: 'Esperando a recoger',
+      colorFondo: '#3B82F6',
       colorTexto: '#fff',
       colorIcono: '#fff',
       activo: true
     },
-    entregado: {
+    abordo_vuelta: {
       icono: 'checkmark-circle-outline',
-      titulo: 'Llegó a casa',
-      mensaje: 'Tu hijo fue entregado en casa.',
+      titulo: 'Ruta iniciada',
+      mensaje: 'Abordo',
+      colorFondo: '#10B981',
+      colorTexto: '#fff',
+      colorIcono: '#fff',
+      activo: true
+    },
+    entregado_vuelta: {
+      icono: 'home-outline',
+      titulo: 'Ruta finalizada',
+      mensaje: 'Llegada a casa',
       colorFondo: '#10B981',
       colorTexto: '#fff',
       colorIcono: '#fff',
       activo: false
+    },
+
+    // Común
+    ausente: {
+      icono: 'close-circle-outline',
+      titulo: 'Ausente hoy',
+      mensaje: 'Tu hijo ha sido marcado como ausente para este viaje.',
+      colorFondo: '#FEE2E2',
+      colorTexto: '#DC2626',
+      colorIcono: '#DC2626',
+      activo: false
     }
   }[estadoVisual] || {
     icono: 'time-outline',
-    titulo: 'Esperando recogida',
+    titulo: 'Viaje no iniciado',
     mensaje: 'El conductor aún no ha iniciado la ruta.',
     colorFondo: '#F5F8FC',
     colorTexto: '#0D1B3E',
@@ -176,7 +223,7 @@ function ViajeActivoPadre({
         <Ionicons name={configVisual.icono} size={22} color={configVisual.colorIcono} />
       </View>
 
-      {rutaActiva && (
+      {rutaActiva && estadoHijo !== 'ausente' && estadoHijo !== 'entregado' && (
         <>
           <Text style={styles.sectionLabel}>Ubicación del bus</Text>
           <View style={styles.mapaContainer}>
@@ -271,16 +318,32 @@ function ViajeActivoPadre({
         </View>
         <View style={styles.divider} />
         <FilaInfoViaje icon="school-outline" label="Escuela" valor={getSafeText(rutaInfo?.escuela, 'Colegio San Agustín')} />
-        <FilaInfoViaje 
-          icon="time-outline" 
-          label={tipoViaje === 'vuelta' ? 'Salida Colegio' : 'Horario'} 
-          valor={
-            tipoViaje === 'vuelta' 
-              ? (rutaInfo?.hora_salida_vuelta || '2:30 PM (Aprox.)') 
-              : (rutaInfo?.horario || '6:30 AM — 7:15 AM')
-          } 
-          last 
-        />
+        {rutaActiva ? (
+          <FilaInfoViaje 
+            icon="time-outline" 
+            label={tipoViaje === 'vuelta' ? 'Salida Colegio' : 'Horario'} 
+            valor={
+              tipoViaje === 'vuelta' 
+                ? (rutaInfo?.hora_salida_vuelta || '2:30 PM (Aprox.)') 
+                : (rutaInfo?.horario || '6:30 AM — 7:15 AM')
+            } 
+            last 
+          />
+        ) : (
+          <>
+            <FilaInfoViaje 
+              icon="time-outline" 
+              label="Horario Entrada" 
+              valor={rutaInfo?.horario || '6:30 AM — 7:15 AM'} 
+            />
+            <FilaInfoViaje 
+              icon="time-outline" 
+              label="Salida Colegio" 
+              valor={rutaInfo?.hora_salida_vuelta || '2:30 PM (Aprox.)'} 
+              last 
+            />
+          </>
+        )}
       </View>
 
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Estado de tus hijos</Text>
@@ -322,6 +385,7 @@ function ViajeActivoConductor({
   bottomInset
 }) {
   const [permission, requestPermission] = useCameraPermissions();
+  const [mostrarEscaner, setMostrarEscaner] = useState(false);
 
   const abordo = estudiantes.filter(e => e.estado === 'abordo').length;
   const pendiente = estudiantes.filter(e => e.estado === 'pendiente').length;
@@ -329,7 +393,7 @@ function ViajeActivoConductor({
 
   const estudianteActual = tipoViaje === 'ida'
     ? estudiantes.find(e => e.estado === 'pendiente')
-    : estudiantes.find(e => e.estado === 'abordo');
+    : (estudiantes.find(e => e.estado === 'pendiente') || estudiantes.find(e => e.estado === 'abordo'));
 
   const regionMapa = posicionBus
     ? {
@@ -373,19 +437,23 @@ function ViajeActivoConductor({
             )}
 
             {/* Paradas de los estudiantes */}
-            {(estudiantes || []).filter(e => e.lat && e.lng).map((est, idx) => (
-              <Marker 
-                key={est.id || est._id} 
-                coordinate={{ latitude: Number(est.lat), longitude: Number(est.lng) }} 
-                title={`Parada ${est.orden || idx + 1}: ${est.nombre}`}
-                description={est.direccion || 'Punto de recogida'}
-                zIndex={10}
-              >
-                <View style={[styles.customMarkerHito, { backgroundColor: '#3B82F6', width: 28, height: 28, borderRadius: 14 }]}>
-                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>{est.orden || idx + 1}</Text>
-                </View>
-              </Marker>
-            ))}
+            {(estudiantes || []).filter(e => e.lat && e.lng).map((est, idx) => {
+              const numOrden = (!est.orden || est.orden >= 99) ? (idx + 1) : est.orden;
+              const markerBg = est.estado === 'abordo' ? '#16A34A' : (est.estado === 'ausente' ? '#DC2626' : (est.estado === 'entregado' ? '#0D1B3E' : '#3B82F6'));
+              return (
+                <Marker 
+                  key={est.id || est._id} 
+                  coordinate={{ latitude: Number(est.lat), longitude: Number(est.lng) }} 
+                  title={`Parada ${numOrden}: ${est.nombre}`}
+                  description={est.direccion || 'Punto de recogida'}
+                  zIndex={10}
+                >
+                  <View style={[styles.customMarkerHito, { backgroundColor: markerBg, width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: '#fff' }]}>
+                    <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{numOrden}</Text>
+                  </View>
+                </Marker>
+              );
+            })}
 
             {/* Destino final: Escuela */}
             <Marker 
@@ -402,53 +470,186 @@ function ViajeActivoConductor({
           </MapView>
         </View>
 
+        {/* Panel escáner QR colapsable */}
+        <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
+          <TouchableOpacity 
+            style={{ 
+              backgroundColor: mostrarEscaner ? '#DC2626' : '#0D1B3E', 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              padding: 12, 
+              borderRadius: 12,
+              gap: 8
+            }} 
+            onPress={() => setMostrarEscaner(!mostrarEscaner)}
+          >
+            <Ionicons name={mostrarEscaner ? 'close-circle-outline' : 'qr-code-outline'} size={18} color="#fff" />
+            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>
+              {mostrarEscaner ? 'Ocultar Escáner QR' : 'Escanear Código QR en ruta'}
+            </Text>
+          </TouchableOpacity>
+
+          {mostrarEscaner && (
+            <View style={[styles.cameraContainer, { height: 180, marginTop: 8 }]}>
+              {permission?.granted ? (
+                <CameraView 
+                  style={{ flex: 1 }} 
+                  facing="back" 
+                  onBarcodeScanned={tipoViaje === 'ida' ? handleQRScanned : handleParentQRScanned} 
+                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }} 
+                />
+              ) : (
+                <TouchableOpacity style={styles.btnPrimary} onPress={requestPermission}>
+                  <Text style={styles.btnPrimaryText}>Conceder permiso de cámara</Text>
+                </TouchableOpacity>
+              )}
+              <View style={styles.qrOverlay}>
+                <View style={[styles.qrFrame, { width: 120, height: 120 }]}>
+                  <View style={[styles.qrCorner, styles.qrCornerTL]} /><View style={[styles.qrCorner, styles.qrCornerTR]} />
+                  <View style={[styles.qrCorner, styles.qrCornerBL]} /><View style={[styles.qrCorner, styles.qrCornerBR]} />
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
+
         {/* Listado de secuencia de paradas */}
         <Text style={styles.sectionLabel}>Secuencia de paradas</Text>
         <View style={[styles.infoCard, { marginBottom: 16, paddingVertical: 4 }]}>
-          {(estudiantes || []).map((est, idx) => (
-            <View key={est.id || est._id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: idx < estudiantes.length - 1 ? 1 : 0, borderBottomColor: '#E3ECF7' }}>
-              <View style={[styles.customMarkerHito, { backgroundColor: est.estado === 'abordo' ? '#16A34A' : (est.estado === 'ausente' ? '#DC2626' : '#3B82F6'), width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}>
-                <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{est.orden || idx + 1}</Text>
-              </View>
+          {/* Escuela al inicio si es viaje de vuelta */}
+          {tipoViaje === 'vuelta' && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#E3ECF7' }}>
+              <View style={[styles.customMarkerHito, { backgroundColor: '#10B981', width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}><Text style={{ fontSize: 11 }}>🏫</Text></View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{est.nombre}</Text>
-                <Text style={{ fontSize: 11, color: '#666' }} numberOfLines={1}>{est.direccion || 'Sin referencia registrada'}</Text>
-              </View>
-              <View style={{ backgroundColor: est.estado === 'abordo' ? '#E6F9EE' : (est.estado === 'ausente' ? '#FEE2E2' : '#FFF8E1'), paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', color: est.estado === 'abordo' ? '#16A34A' : (est.estado === 'ausente' ? '#DC2626' : '#F59E0B') }}>
-                  {est.estado === 'abordo' ? 'A Bordo' : (est.estado === 'ausente' ? 'Ausente' : 'Pendiente')}
-                </Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{rutaInfo?.escuela || 'Escuela (Punto de Salida)'}</Text>
+                <Text style={{ fontSize: 11, color: '#666' }}>Salida de la ruta escolar</Text>
               </View>
             </View>
-          ))}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: '#E3ECF7' }}>
-            <View style={[styles.customMarkerHito, { backgroundColor: '#10B981', width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}><Text style={{ fontSize: 11 }}>🏫</Text></View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{rutaInfo?.escuela || 'Escuela (Destino Final)'}</Text>
-              <Text style={{ fontSize: 11, color: '#666' }}>Llegada de la ruta escolar</Text>
+          )}
+
+          {(estudiantes || []).map((est, idx) => {
+            const numOrden = (!est.orden || est.orden >= 99) ? (idx + 1) : est.orden;
+            
+            // Mapeo completo de estados para el conductor (incluye entregado)
+            const statusCfg = {
+              pendiente: { label: 'Pendiente', color: '#F59E0B', bg: '#FFF8E1' },
+              abordo: { label: 'A Bordo', color: '#16A34A', bg: '#E6F9EE' },
+              ausente: { label: 'Ausente', color: '#DC2626', bg: '#FEE2E2' },
+              entregado: { label: 'Entregado', color: '#0D1B3E', bg: '#E2E8F0' }
+            }[est.estado] || { label: 'Pendiente', color: '#F59E0B', bg: '#FFF8E1' };
+
+            return (
+              <View key={est.id || est._id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: idx < estudiantes.length - 1 ? 1 : 0, borderBottomColor: '#E3ECF7' }}>
+                <View style={[styles.customMarkerHito, { backgroundColor: est.estado === 'abordo' ? '#16A34A' : (est.estado === 'ausente' ? '#DC2626' : (est.estado === 'entregado' ? '#0D1B3E' : '#3B82F6')), width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}>
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{numOrden}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{est.nombre}</Text>
+                  <Text style={{ fontSize: 11, color: '#666' }} numberOfLines={1}>{est.direccion || 'Sin referencia registrada'}</Text>
+                </View>
+                <View style={{ backgroundColor: statusCfg.bg, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: statusCfg.color }}>
+                    {statusCfg.label}
+                  </Text>
+                </View>
+                {/* Acciones manuales en línea */}
+                <View style={{ flexDirection: 'row', gap: 6, marginLeft: 10 }}>
+                  {tipoViaje === 'ida' ? (
+                    <>
+                      {est.estado === 'pendiente' && (
+                        <>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#16A34A', padding: 6, borderRadius: 6 }} 
+                            onPress={() => marcarEstado(est.id, 'abordo')}
+                          >
+                            <Ionicons name="checkmark" size={14} color="#fff" />
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#DC2626', padding: 6, borderRadius: 6 }} 
+                            onPress={() => marcarEstado(est.id, 'ausente')}
+                          >
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {est.estado === 'ausente' && (
+                        <TouchableOpacity 
+                          style={{ backgroundColor: '#16A34A', padding: 6, borderRadius: 6 }} 
+                          onPress={() => marcarEstado(est.id, 'abordo')}
+                        >
+                          <Ionicons name="checkmark" size={14} color="#fff" />
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {est.estado === 'pendiente' && (
+                        <>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#16A34A', padding: 6, borderRadius: 6 }} 
+                            onPress={() => marcarEstado(est.id, 'abordo')}
+                          >
+                            <Ionicons name="checkmark" size={14} color="#fff" />
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#DC2626', padding: 6, borderRadius: 6 }} 
+                            onPress={() => marcarEstado(est.id, 'ausente')}
+                          >
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {est.estado === 'abordo' && (
+                        <>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#0D1B3E', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }} 
+                            onPress={() => marcarEstado(est.id, 'entregado')}
+                          >
+                            <Ionicons name="hand-left-outline" size={12} color="#fff" />
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Entregar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={{ backgroundColor: '#DC2626', padding: 6, borderRadius: 6 }} 
+                            onPress={() => marcarEstado(est.id, 'ausente')}
+                          >
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {est.estado === 'ausente' && (
+                        <TouchableOpacity 
+                          style={{ backgroundColor: '#16A34A', padding: 6, borderRadius: 6 }} 
+                          onPress={() => marcarEstado(est.id, 'abordo')}
+                        >
+                          <Ionicons name="checkmark" size={14} color="#fff" />
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+
+          {/* Escuela al final si es viaje de ida */}
+          {tipoViaje === 'ida' && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: '#E3ECF7' }}>
+              <View style={[styles.customMarkerHito, { backgroundColor: '#10B981', width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}><Text style={{ fontSize: 11 }}>🏫</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{rutaInfo?.escuela || 'Escuela (Destino Final)'}</Text>
+                <Text style={{ fontSize: 11, color: '#666' }}>Llegada de la ruta escolar</Text>
+              </View>
             </View>
-          </View>
+          )}
         </View>
 
         {estudianteActual && <IndicadorParada tipoViaje={tipoViaje} student={estudianteActual} />}
 
-        {estudianteActual ? (
+         {estudianteActual ? (
           <View style={styles.seccionAccion}>
             {tipoViaje === 'ida' ? (
               <>
-                <View style={styles.cameraContainer}>
-                  {permission?.granted ? (
-                    <CameraView style={{ flex: 1 }} facing="back" onBarcodeScanned={handleQRScanned} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} />
-                  ) : (
-                    <TouchableOpacity style={styles.btnPrimary} onPress={requestPermission}><Text style={styles.btnPrimaryText}>Conceder permiso de cámara</Text></TouchableOpacity>
-                  )}
-                  <View style={styles.qrOverlay}>
-                    <View style={styles.qrFrame}>
-                      <View style={[styles.qrCorner, styles.qrCornerTL]} /><View style={[styles.qrCorner, styles.qrCornerTR]} />
-                      <View style={[styles.qrCorner, styles.qrCornerBL]} /><View style={[styles.qrCorner, styles.qrCornerBR]} />
-                    </View>
-                  </View>
-                </View>
                 <TarjetaEstudiante student={estudianteActual} />
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
                   <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#16A34A', flex: 1 }]} onPress={() => marcarEstado(estudianteActual.id, 'abordo')}>
@@ -461,24 +662,27 @@ function ViajeActivoConductor({
               </>
             ) : (
               <>
-                <View style={styles.cameraContainer}>
-                  {permission?.granted ? (
-                    <CameraView style={{ flex: 1 }} facing="back" onBarcodeScanned={handleParentQRScanned} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} />
-                  ) : (
-                    <TouchableOpacity style={styles.btnPrimary} onPress={requestPermission}><Text style={styles.btnPrimaryText}>Conceder permiso de cámara</Text></TouchableOpacity>
-                  )}
-                  <View style={styles.qrOverlay}>
-                    <View style={styles.qrFrame}>
-                      <View style={[styles.qrCorner, styles.qrCornerTL]} /><View style={[styles.qrCorner, styles.qrCornerTR]} />
-                      <View style={[styles.qrCorner, styles.qrCornerBL]} /><View style={[styles.qrCorner, styles.qrCornerBR]} />
-                    </View>
-                  </View>
-                </View>
                 <TarjetaEstudiante student={estudianteActual} />
-                <View style={{ flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                  <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#0D1B3E' }]} onPress={() => marcarEstado(estudianteActual.id, 'entregado')}>
-                    <Ionicons name="hand-left-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>Entregar estudiante</Text>
-                  </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                  {estudianteActual.estado === 'abordo' ? (
+                    <>
+                      <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#0D1B3E', flex: 1 }]} onPress={() => marcarEstado(estudianteActual.id, 'entregado')}>
+                        <Ionicons name="hand-left-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>Entregar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#DC2626', width: 110 }]} onPress={() => marcarEstado(estudianteActual.id, 'ausente')}>
+                        <Ionicons name="close-circle-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>Ausente</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#16A34A', flex: 1 }]} onPress={() => marcarEstado(estudianteActual.id, 'abordo')}>
+                        <Ionicons name="checkmark-circle-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>A Bordo</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btnAction, { backgroundColor: '#DC2626', width: 110 }]} onPress={() => marcarEstado(estudianteActual.id, 'ausente')}>
+                        <Ionicons name="close-circle-outline" size={20} color="#fff" /><Text style={styles.btnActionText}>Ausente</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
                 </View>
               </>
             )}
