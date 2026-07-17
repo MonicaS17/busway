@@ -31,6 +31,7 @@ export default function EscuelasPage() {
   const [showModal, setShowModal]   = useState(false);
   const [guardando, setGuardando]   = useState(false);
   const [editandoEscuelaId, setEditandoEscuelaId] = useState(null);
+  const [mapCenter, setMapCenter]   = useState({ lat: 8.9833, lng: -79.5167 });
   const [form, setForm] = useState({
     nombre:        '',
     provincia:     '',
@@ -48,6 +49,20 @@ export default function EscuelasPage() {
       .then((data) => setEscuelas(data.escuelas))
       .catch(console.error)
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const handleMessage = (e) => {
+      if (e.data && typeof e.data.lat === 'number' && typeof e.data.lng === 'number') {
+        setForm((prev) => ({
+          ...prev,
+          lat: e.data.lat,
+          lng: e.data.lng
+        }));
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, []);
 
   const distritosDisp = DISTRITOS[form.provincia] ?? [];
@@ -75,6 +90,8 @@ export default function EscuelasPage() {
   };
 
   const handleEditClick = (school) => {
+    const lat = school.lat || 8.9833;
+    const lng = school.lng || -79.5167;
     setForm({
       nombre: school.nombre || '',
       provincia: school.provincia || '',
@@ -82,10 +99,11 @@ export default function EscuelasPage() {
       corregimiento: school.corregimiento || '',
       direccion: school.direccion || '',
       indicaciones: school.indicaciones || '',
-      lat: school.lat || 8.9833,
-      lng: school.lng || -79.5167,
+      lat,
+      lng,
       estado: school.estado || 'Activa'
     });
+    setMapCenter({ lat, lng });
     setEditandoEscuelaId(school._id);
     setShowModal(true);
   };
@@ -152,7 +170,7 @@ export default function EscuelasPage() {
       {/* Botón agregar */}
       <button
         type="button"
-        onClick={() => setShowModal(true)}
+        onClick={() => { resetForm(); setMapCenter({ lat: 8.9833, lng: -79.5167 }); setShowModal(true); }}
         className="mb-5 flex h-14 w-full items-center justify-center gap-2 rounded-md bg-busway-yellow text-sm font-extrabold text-navy shadow-sm hover:bg-yellow-400 transition"
       >
         <FiPlus size={18} />
@@ -325,48 +343,21 @@ export default function EscuelasPage() {
                 />
               </label>
 
-              {/* Coordenadas */}
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-slate-700">Latitud</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form.lat}
-                    onChange={(e) => setForm({ ...form, lat: parseFloat(e.target.value) || 0 })}
-                    placeholder="8.9833"
-                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-busway-blue"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-slate-700">Longitud</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form.lng}
-                    onChange={(e) => setForm({ ...form, lng: parseFloat(e.target.value) || 0 })}
-                    placeholder="-79.5167"
-                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-busway-blue"
-                  />
-                </label>
-              </div>
-
-              {/* Mapa de Previsualización */}
+              {/* Mapa de Ubicación Geográfica */}
               <div className="block">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-semibold text-slate-700">Previsualización de Ubicación</span>
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${form.lat || 8.9833},${form.lng || -79.5167}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-bold text-blue-500 hover:underline"
-                  >
-                    Buscar coordenadas ↗
-                  </a>
+                  <span className="text-sm font-semibold text-slate-700">Ubicar en el Mapa</span>
+                  <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                    {form.lat.toFixed(5)}, {form.lng.toFixed(5)}
+                  </span>
                 </div>
+                <p className="mb-2 text-xs text-slate-500">
+                  Haz clic en el mapa o arrastra el marcador para ubicar la escuela.
+                </p>
                 <iframe
-                  src={`https://maps.google.com/maps?q=${form.lat || 8.9833},${form.lng || -79.5167}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                  className="w-full h-40 rounded-lg border border-slate-200"
+                  key={`${editandoEscuelaId || 'nueva'}`}
+                  src={`/map.html?lat=${mapCenter.lat}&lng=${mapCenter.lng}`}
+                  className="w-full h-60 rounded-lg border border-slate-200 shadow-sm"
                   style={{ border: 0 }}
                   allowFullScreen=""
                   loading="lazy"
