@@ -784,17 +784,15 @@ function RutaConductor({ navigation, usuario }) {
       });
 
       const estudiantesObtenidos = resEst.data?.estudiantes || [];
-      
-      const conteoPorRuta = {};
+      const rutasBackend = resRuta.data?.rutas || (resRuta.data?.ruta ? [resRuta.data.ruta] : []);
+
       const mappedEstudiantes = estudiantesObtenidos.map((e) => {
         const rId = e.ruta_id && typeof e.ruta_id === 'object' ? e.ruta_id._id : (e.ruta_id || null);
         const rIdStr = rId ? rId.toString() : 'sin_ruta';
         
-        if (conteoPorRuta[rIdStr] === undefined) {
-          conteoPorRuta[rIdStr] = 0;
-        }
-        conteoPorRuta[rIdStr] += 1;
-        const localIndex = conteoPorRuta[rIdStr];
+        const rutaBackend = rutasBackend.find(r => String(r._id) === rIdStr);
+        const matchEst = rutaBackend?.estudiantes?.find(item => String(item.estudiante_id) === String(e._id));
+        const orden = matchEst ? matchEst.orden : 999;
 
         return {
           id: e._id,
@@ -802,14 +800,15 @@ function RutaConductor({ navigation, usuario }) {
           zona: e.zona || 'Arraiján',
           escuela: e.escuela || (resRuta.data?.ruta?.escuela_id ? (typeof resRuta.data.ruta.escuela_id === 'object' ? resRuta.data.ruta.escuela_id.nombre : resRuta.data.ruta.escuela) : (resRuta.data?.ruta?.escuela || 'Colegio')),
           ruta_id: rId,
-          inputPos: localIndex.toString(),
+          orden: orden,
+          inputPos: orden.toString(),
         };
       });
 
+      mappedEstudiantes.sort((a, b) => a.orden - b.orden);
       setEstudiantes(mappedEstudiantes);
 
       if (resRuta.data) {
-        const rutasBackend = resRuta.data.rutas || (resRuta.data.ruta ? [resRuta.data.ruta] : []);
         const mappedRutas = rutasBackend.map(r => ({
           id: r._id,
           nombre_ruta: r.nombre_ruta || r.nombre || 'Ruta sin nombre',
@@ -824,7 +823,8 @@ function RutaConductor({ navigation, usuario }) {
           nombre: r.nombre,
           escuela_lat: r.escuela_lat || null,
           escuela_lng: r.escuela_lng || null,
-          hora_salida_vuelta: r.hora_salida_vuelta || null
+          hora_salida_vuelta: r.hora_salida_vuelta || null,
+          estudiantes: r.estudiantes || []
         }));
         setRutas(mappedRutas);
       } else {
@@ -1116,6 +1116,7 @@ function RutaConductor({ navigation, usuario }) {
 
     const filteredAndReindexed = nuevas.filter(e => e.ruta_id === rutaSeleccionada.id);
     filteredAndReindexed.forEach((e, i) => {
+      e.orden = i + 1;
       e.inputPos = (i + 1).toString();
     });
 
@@ -1143,6 +1144,7 @@ function RutaConductor({ navigation, usuario }) {
     const finalNuevas = nuevas.map(e => {
       if (e.ruta_id === rutaSeleccionada.id) {
         const item = deRuta[deRutaIdx++];
+        item.orden = deRutaIdx;
         item.inputPos = deRutaIdx.toString();
         return item;
       }
@@ -1645,6 +1647,17 @@ function RutaConductor({ navigation, usuario }) {
                     }, {
                       headers: { Authorization: `Bearer ${token}` }
                     });
+
+                    // Sincronizar el orden en los estados locales de la app
+                    const dbMappedEst = payloadEstudiantes.map(p => ({
+                      estudiante_id: p.estudiante_id,
+                      orden: p.orden
+                    }));
+                    setRutaSeleccionada(prev => ({
+                      ...prev,
+                      estudiantes: dbMappedEst
+                    }));
+                    setRutas(prevRutas => prevRutas.map(r => r.id === rutaSeleccionada.id ? { ...r, estudiantes: dbMappedEst } : r));
                     
                     Alert.alert('Éxito', 'El orden de recogida ha sido guardado correctamente.');
                   } catch (err) {
