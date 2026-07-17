@@ -74,7 +74,23 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     const escuelas = await Escuela.find(query).sort({ nombre: 1 });
-    res.json({ escuelas });
+    
+    // Importar el modelo de Ruta para obtener estadísticas reales
+    const Ruta = require('../models/Ruta');
+    const escuelasConStats = await Promise.all(escuelas.map(async (esc) => {
+      const activeRoutes = await Ruta.find({ escuela_id: esc._id });
+      const rutasCount = activeRoutes.length;
+      
+      const uniqueConductors = new Set(activeRoutes.map(r => r.conductor_id?.toString()).filter(Boolean));
+      const conductoresCount = uniqueConductors.size;
+      
+      const escObj = esc.toObject();
+      escObj.rutas = rutasCount;
+      escObj.conductores = conductoresCount;
+      return escObj;
+    }));
+
+    res.json({ escuelas: escuelasConStats });
   } catch (error) {
     console.error('Error al obtener escuelas:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
@@ -124,7 +140,14 @@ router.patch('/:id', verifyToken, requireRole('administrador'), async (req, res)
     const escuela = await Escuela.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!escuela) return res.status(404).json({ error: 'Escuela no encontrada' });
     
-    res.json({ mensaje: 'Escuela actualizada', escuela });
+    // Calcular dinámicamente estadísticas para la escuela editada
+    const Ruta = require('../models/Ruta');
+    const activeRoutes = await Ruta.find({ escuela_id: escuela._id });
+    const escObj = escuela.toObject();
+    escObj.rutas = activeRoutes.length;
+    escObj.conductores = new Set(activeRoutes.map(r => r.conductor_id?.toString()).filter(Boolean)).size;
+
+    res.json({ mensaje: 'Escuela actualizada', escuela: escObj });
   } catch (error) {
     console.error('Error al actualizar escuela:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
