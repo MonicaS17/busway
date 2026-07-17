@@ -16,6 +16,17 @@ async function notificarPadre(hijo_id, viaje_id, tipo_evento, titulo, mensaje) {
     const padre = await Usuario.findById(estudiante.padre_id);
     if (!padre) return;
 
+    // Verificar si el padre tiene un acuerdo activo con pago efectivo (stripe_subscription_id)
+    const Acuerdo = require('../models/Acuerdo');
+    const acuerdoActivo = await Acuerdo.findOne({
+      padre_id: padre._id,
+      estado: 'activo'
+    });
+    if (!acuerdoActivo || !acuerdoActivo.stripe_subscription_id) {
+      console.log(`[Notification Blocked] El padre ${padre.nombre} no ha realizado el pago efectivo. Notificación omitida.`);
+      return;
+    }
+
     const nombreNino = estudiante.nombre;
     let tituloPersonalizado = titulo;
     let mensajePersonalizado = mensaje;
