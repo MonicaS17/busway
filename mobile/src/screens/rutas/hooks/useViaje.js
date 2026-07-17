@@ -502,7 +502,7 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
       }
     } catch {}
 
-    const est = estudiantes.find(e => e.id === childId || e.qr === data);
+    const est = estudiantes.find(e => String(e.id) === String(childId) || String(e._id) === String(childId));
     if (est) {
       if (est.estado === 'abordo') {
         Alert.alert('Ya registrado', `${est.nombre} ya está a bordo.`);
@@ -528,12 +528,16 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
       }
     } catch {}
 
-    const scannedStudent = estudiantes.find(e => (e.id === childId || e.qr === data) && e.estado === 'abordo');
+    const scannedStudent = estudiantes.find(e => String(e.id) === String(childId) || String(e._id) === String(childId));
     if (scannedStudent) {
-      marcarEstado(scannedStudent.id, 'entregado');
-      Alert.alert('Entrega confirmada', `Estudiante ${scannedStudent.nombre} entregado exitosamente al padre.`);
+      if (scannedStudent.estado === 'entregado') {
+        Alert.alert('Ya entregado', `${scannedStudent.nombre} ya ha sido entregado.`);
+      } else {
+        marcarEstado(scannedStudent.id, 'entregado');
+        Alert.alert('Entrega confirmada', `Estudiante ${scannedStudent.nombre} entregado exitosamente al padre.`);
+      }
     } else {
-      Alert.alert('QR no válido', 'El código QR no corresponde a ningún estudiante a bordo.');
+      Alert.alert('QR no válido', 'El código QR no corresponde a ningún estudiante de esta ruta.');
     }
     setTimeout(() => setUltimoEscaneado(null), 3000);
   };
